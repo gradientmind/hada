@@ -28,6 +28,7 @@ interface AgentResponse {
     result?: {
         content?: string;
         message?: string;
+        [key: string]: any;
     };
     error?: string;
 }
@@ -245,13 +246,23 @@ export async function sendMessageViaWebSocket(
         const conn = await getConnection();
         const response = await conn.sendAgentMessage(message, sessionId);
 
+
         // sendAgentMessage now waits for 'ok' status
         if (response.status === 'ok' && response.result) {
+            // Check for payloads (standard moltbot response)
+            if (Array.isArray(response.result.payloads) && response.result.payloads.length > 0) {
+                const text = response.result.payloads[0].text;
+                if (text) return { content: text, runId: response.runId };
+            }
+
             return {
-                content: response.result.content || response.result.message || '',
+                content: response.result.content || response.result.message || response.result.text || response.result.output || JSON.stringify(response.result),
                 runId: response.runId,
             };
+        } else if (response.status === 'error') {
+            console.error('[MoltbotWS] Agent returned error:', response.error);
         }
+
 
         return null;
     } catch (error) {

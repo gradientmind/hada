@@ -9,11 +9,8 @@ services:
       - .env.local
     environment:
       - LLM_PROVIDER=${LLM_PROVIDER:-minimax}
-      - MINIMAX_API_KEY=${MINIMAX_API_KEY}
       - MINIMAX_BASE_URL=${MINIMAX_BASE_URL:-https://api.minimax.io/v1}
       - MINIMAX_MODEL=${MINIMAX_MODEL:-MiniMax-Text-01}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
     volumes:
       - moltbot-data:/root/.moltbot/data
     restart: unless-stopped
