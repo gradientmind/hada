@@ -5,6 +5,8 @@
  * This allows the chat to work even before moltbot is fully configured.
  */
 
+import { sendMessageViaWebSocket } from './websocket-client';
+
 const GATEWAY_URL = process.env.MOLTBOT_GATEWAY_URL || 'ws://localhost:18789';
 const LLM_PROVIDER = (process.env.LLM_PROVIDER || 'minimax').split('#')[0]?.trim() || 'minimax';
 const LLM_API_KEY =
@@ -52,15 +54,15 @@ function processThinkingTags(content: string): { content: string; thinking?: str
 
 /**
  * Send a message and get a response
- * Tries moltbot Gateway first, falls back to direct LLM API
+ * Tries moltbot Gateway (WebSocket) first, falls back to direct LLM API
  */
 export async function sendMessage(
   message: string,
   sessionId: string,
   userId: string
 ): Promise<MoltbotResponse> {
-  // Try moltbot Gateway first
-  const gatewayResponse = await tryGateway(message, sessionId);
+  // Try moltbot Gateway via WebSocket first
+  const gatewayResponse = await tryGatewayWebSocket(message, sessionId);
   if (gatewayResponse) {
     return gatewayResponse;
   }
@@ -70,48 +72,28 @@ export async function sendMessage(
 }
 
 /**
- * Try to connect to moltbot Gateway
+ * Try to connect to moltbot Gateway via WebSocket
  */
-async function tryGateway(
+async function tryGatewayWebSocket(
   message: string,
   sessionId: string
 ): Promise<MoltbotResponse | null> {
-  const gatewayHttpUrl = GATEWAY_URL.replace('ws://', 'http://').replace('wss://', 'https://');
-
   try {
-    // Check if Gateway is available
-    const healthCheck = await fetch(`${gatewayHttpUrl}/health`, {
-      method: 'GET',
-      signal: AbortSignal.timeout(2000),
-    });
+    const result = await sendMessageViaWebSocket(message, sessionId);
 
-    if (!healthCheck.ok) {
-      return null;
+    if (result) {
+      const processed = processThinkingTags(result.content);
+      return {
+        content: processed.content,
+        thinking: processed.thinking,
+        done: true,
+        source: 'gateway',
+      };
     }
 
-    // Try to send message via Gateway HTTP API
-    const response = await fetch(`${gatewayHttpUrl}/api/agent`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message, sessionId }),
-      signal: AbortSignal.timeout(30000),
-    });
-
-    if (!response.ok) {
-      return null;
-    }
-
-    const data = await response.json();
-    const rawContent = data.content || data.message || '';
-    const processed = processThinkingTags(rawContent);
-    return {
-      content: processed.content,
-      thinking: processed.thinking,
-      done: true,
-      source: 'gateway' as const,
-    };
-  } catch {
-    // Gateway not available
+    return null;
+  } catch (error) {
+    console.error('WebSocket gateway error:', error);
     return null;
   }
 }
@@ -262,18 +244,9 @@ function extractContent(data: Record<string, unknown>, provider: string): string
 }
 
 /**
- * Check if the Gateway is healthy
+ * Check if the Gateway is healthy (via WebSocket)
  */
 export async function checkHealth(): Promise<boolean> {
-  const gatewayHttpUrl = GATEWAY_URL.replace('ws://', 'http://').replace('wss://', 'https://');
-
-  try {
-    const response = await fetch(`${gatewayHttpUrl}/health`, {
-      method: 'GET',
-      signal: AbortSignal.timeout(2000),
-    });
-    return response.ok;
-  } catch {
-    return false;
-  }
+  const { checkGatewayConnection } = await import('./websocket-client');
+  return checkGatewayConnection();
 }
