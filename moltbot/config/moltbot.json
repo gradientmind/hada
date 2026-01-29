@@ -1,0 +1,16 @@
+{
+    "agents": {
+        "defaults": {
+            "model": {
+                "primary": "minimax/MiniMax-M2.1"
+            }
+        }
+    },
+    "gateway": {
+        "port": 18789,
+        "mode": "local",
+        "auth": {
+            "token": "hada-dev-token-12345"
+        }
+    }
+}

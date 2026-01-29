@@ -14,6 +14,8 @@ interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
+  thinking?: string;
+  source?: string;
   timestamp: Date;
 }
 
@@ -21,6 +23,7 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isThinking, setIsThinking] = useState(false);
   const [user, setUser] = useState<{ email?: string; name?: string } | null>(null);
   const [greetingText, setGreetingText] = useState("Hello");
   const scrollAreaRootRef = useRef<HTMLDivElement>(null);
@@ -81,18 +84,42 @@ export default function ChatPage() {
     setInput("");
     setIsLoading(true);
 
-    // TODO: Replace with actual API call to moltbot
-    // For now, simulate a response
-    setTimeout(() => {
+    try {
+      setIsThinking(true);
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          message: userMessage.content,
+        }),
+      });
+
+      const data = await response.json();
+
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: `I understand you want me to help with: "${userMessage.content}". Once connected to the backend, I'll be able to actually help you with this!`,
+        content: data.content || data.error || "Sorry, I encountered an error.",
+        thinking: data.thinking,
+        source: data.source,
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, assistantMessage]);
+    } catch (error) {
+      console.error("Chat error:", error);
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content: "Sorry, I'm having trouble connecting. Please try again.",
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+    } finally {
       setIsLoading(false);
-    }, 1000);
+      setIsThinking(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -186,93 +213,94 @@ export default function ChatPage() {
           {/* Messages Area */}
           <div ref={scrollAreaRootRef} className="flex-1 py-4">
             <ScrollArea className="h-full">
-            <div className="space-y-6 pb-4">
-              {messages.length === 0 ? (
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4"
-                >
-                  <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-black dark:bg-white mb-6">
-                    <span className="text-2xl font-bold text-white dark:text-black">H</span>
-                  </div>
-                  <h1 className="text-3xl font-semibold">
-                    {greetingText}, {user?.name || "there"}
-                  </h1>
-                  <p className="mt-2 text-zinc-500 text-lg">What can I help you with today?</p>
+              <div className="space-y-6 pb-4">
+                {messages.length === 0 ? (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4"
+                  >
+                    <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-black dark:bg-white mb-6">
+                      <span className="text-2xl font-bold text-white dark:text-black">H</span>
+                    </div>
+                    <h1 className="text-3xl font-semibold">
+                      {greetingText}, {user?.name || "there"}
+                    </h1>
+                    <p className="mt-2 text-zinc-500 text-lg">What can I help you with today?</p>
 
-                  <div className="mt-8 grid gap-3 sm:grid-cols-2 w-full max-w-xl">
-                    {[
-                      "What's on my calendar today?",
-                      "Draft an email to my team",
-                      "Book a restaurant for Friday",
-                      "Research the best project management tools",
-                    ].map((suggestion) => (
-                      <button
-                        key={suggestion}
-                        onClick={() => {
-                          setInput(suggestion);
-                          requestAnimationFrame(() => textareaRef.current?.focus());
-                        }}
-                        className="rounded-xl border border-zinc-200 bg-white p-4 text-left text-sm transition-all hover:bg-zinc-50 hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800"
-                      >
-                        {suggestion}
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="mt-8 w-full max-w-xl">
-                    {inputForm}
-                  </div>
-                </motion.div>
-              ) : (
-                <AnimatePresence>
-                  {messages.map((message) => (
-                    <motion.div
-                      key={message.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0 }}
-                      className="flex gap-3"
-                    >
-                      <Avatar className="h-8 w-8 shrink-0">
-                        <AvatarFallback
-                          className={
-                            message.role === "assistant"
-                              ? "bg-black text-white dark:bg-white dark:text-black"
-                              : "bg-zinc-200 dark:bg-zinc-700"
-                          }
+                    <div className="mt-8 grid gap-3 sm:grid-cols-2 w-full max-w-xl">
+                      {[
+                        "What's on my calendar today?",
+                        "Draft an email to my team",
+                        "Book a restaurant for Friday",
+                        "Research the best project management tools",
+                      ].map((suggestion) => (
+                        <button
+                          key={suggestion}
+                          onClick={() => {
+                            setInput(suggestion);
+                            requestAnimationFrame(() => textareaRef.current?.focus());
+                          }}
+                          className="rounded-xl border border-zinc-200 bg-white p-4 text-left text-sm transition-all hover:bg-zinc-50 hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800"
                         >
-                          {message.role === "assistant" ? "H" : user?.name?.[0] || "U"}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 pt-1">
-                        <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
-                      </div>
-                    </motion.div>
-                  ))}
-                </AnimatePresence>
-              )}
+                          {suggestion}
+                        </button>
+                      ))}
+                    </div>
 
-              {isLoading && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="flex gap-3"
-                >
-                  <Avatar className="h-8 w-8 shrink-0">
-                    <AvatarFallback className="bg-black text-white dark:bg-white dark:text-black">
-                      H
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex items-center gap-1 pt-2">
-                    <span className="h-2 w-2 animate-bounce rounded-full bg-zinc-400 [animation-delay:-0.3s]" />
-                    <span className="h-2 w-2 animate-bounce rounded-full bg-zinc-400 [animation-delay:-0.15s]" />
-                    <span className="h-2 w-2 animate-bounce rounded-full bg-zinc-400" />
-                  </div>
-                </motion.div>
-              )}
-            </div>
+                    <div className="mt-8 w-full max-w-xl">
+                      {inputForm}
+                    </div>
+                  </motion.div>
+                ) : (
+                  <AnimatePresence>
+                    {messages.map((message) => (
+                      <motion.div
+                        key={message.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0 }}
+                        className="flex gap-3"
+                      >
+                        <Avatar className="h-8 w-8 shrink-0">
+                          <AvatarFallback
+                            className={
+                              message.role === "assistant"
+                                ? "bg-black text-white dark:bg-white dark:text-black"
+                                : "bg-zinc-200 dark:bg-zinc-700"
+                            }
+                          >
+                            {message.role === "assistant" ? "H" : user?.name?.[0] || "U"}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 pt-1">
+                          <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+                )}
+
+                {isLoading && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="flex gap-3"
+                  >
+                    <Avatar className="h-8 w-8 shrink-0">
+                      <AvatarFallback className="bg-black text-white dark:bg-white dark:text-black">
+                        H
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex items-center gap-2 pt-2">
+                      <span className="text-sm text-zinc-500 dark:text-zinc-400 italic">
+                        {isThinking ? "Thinking..." : "Typing..."}
+                      </span>
+                      <span className="h-2 w-2 animate-pulse rounded-full bg-zinc-400" />
+                    </div>
+                  </motion.div>
+                )}
+              </div>
             </ScrollArea>
           </div>
 

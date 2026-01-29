@@ -1,0 +1,27 @@
+services:
+  moltbot:
+    build:
+      context: ./moltbot
+      dockerfile: Dockerfile
+    ports:
+      - "18789:18789"
+    env_file:
+      - .env.local
+    environment:
+      - LLM_PROVIDER=${LLM_PROVIDER:-minimax}
+      - MINIMAX_API_KEY=${MINIMAX_API_KEY}
+      - MINIMAX_BASE_URL=${MINIMAX_BASE_URL:-https://api.minimax.io/v1}
+      - MINIMAX_MODEL=${MINIMAX_MODEL:-MiniMax-Text-01}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    volumes:
+      - moltbot-data:/root/.moltbot/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:18789/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  moltbot-data:
