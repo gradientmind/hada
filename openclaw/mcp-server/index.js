@@ -12,12 +12,13 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 
 // Get configuration from environment
-const NEXT_APP_URL = process.env.NEXT_APP_URL || "http://localhost:3000";
-const API_TOKEN = process.env.OPENCLAW_API_TOKEN || "";
+const NEXT_APP_URL = process.env.NEXT_APP_URL || "http://nextjs:3000";
+// Try multiple possible env var names for the token
+const API_TOKEN = process.env.OPENCLAW_API_TOKEN || process.env.OPENCLAW_GATEWAY_TOKEN || "hada-mcp-internal";
 
 console.error("[MCP Server] Starting Hada Calendar MCP Server");
 console.error("[MCP Server] Next.js URL:", NEXT_APP_URL);
-console.error("[MCP Server] API Token present:", !!API_TOKEN);
+console.error("[MCP Server] API Token:", API_TOKEN);
 
 // Create MCP server
 const server = new Server(

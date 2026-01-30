@@ -10,6 +10,7 @@ services:
     environment:
       - MINIMAX_API_KEY=${MINIMAX_API_KEY}
       - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:-hada-dev-token-12345}
+      - OPENCLAW_API_TOKEN=${OPENCLAW_API_TOKEN}
     volumes:
       - openclaw-data:/root/.openclaw/data
     restart: unless-stopped

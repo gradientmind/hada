@@ -4,8 +4,7 @@
       "command": "node",
       "args": ["/app/mcp-server/index.js"],
       "env": {
-        "NEXT_APP_URL": "http://nextjs:3000",
-        "OPENCLAW_API_TOKEN": "${OPENCLAW_API_TOKEN}"
+        "NEXT_APP_URL": "http://nextjs:3000"
       }
     }
   },
