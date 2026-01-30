@@ -10,14 +10,13 @@ import { useHealthStatus } from "@/lib/hooks/use-health-status";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, type ReactNode } from "react";
 
 interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
   thinking?: string;
-  source?: string;
   created_at: string;
 }
 
@@ -27,10 +26,79 @@ interface ApiMessage {
   role: "user" | "assistant";
   content: string;
   metadata: {
-    source?: string;
     thinking?: string;
   } | null;
   created_at: string;
+}
+
+function renderInlineBold(text: string) {
+  const parts = text.split("**");
+  return parts.map((part, index) =>
+    index % 2 === 1 ? <strong key={`b-${index}`}>{part}</strong> : part
+  );
+}
+
+function MessageContent({ content }: { content: string }) {
+  const lines = content.split(/\r?\n/);
+  const blocks: ReactNode[] = [];
+  let paragraphBuffer: string[] = [];
+  let listItems: ReactNode[] = [];
+  let keyIndex = 0;
+
+  const flushParagraph = () => {
+    if (paragraphBuffer.length === 0) return;
+    const paragraphText = paragraphBuffer.join("\n");
+    blocks.push(
+      <p key={`p-${keyIndex++}`} className="whitespace-pre-wrap">
+        {renderInlineBold(paragraphText)}
+      </p>
+    );
+    paragraphBuffer = [];
+  };
+
+  const flushList = () => {
+    if (listItems.length === 0) return;
+    blocks.push(
+      <ul key={`ul-${keyIndex++}`} className="list-disc space-y-1 pl-5">
+        {listItems}
+      </ul>
+    );
+    listItems = [];
+  };
+
+  const addSpacer = () => {
+    blocks.push(<div key={`sp-${keyIndex++}`} className="h-2" />);
+  };
+
+  lines.forEach((line, index) => {
+    const listMatch = line.match(/^\s*[-*]\s+(.*)$/);
+    if (listMatch) {
+      flushParagraph();
+      listItems.push(
+        <li key={`li-${keyIndex++}`}>
+          {renderInlineBold(listMatch[1])}
+        </li>
+      );
+      return;
+    }
+
+    if (line.trim() === "") {
+      flushParagraph();
+      flushList();
+      if (index !== 0 && index !== lines.length - 1) {
+        addSpacer();
+      }
+      return;
+    }
+
+    flushList();
+    paragraphBuffer.push(line);
+  });
+
+  flushParagraph();
+  flushList();
+
+  return <div className="text-sm leading-relaxed space-y-2">{blocks}</div>;
 }
 
 export default function ChatPage() {
@@ -59,7 +127,6 @@ export default function ChatPage() {
     role: msg.role,
     content: msg.content,
     thinking: msg.metadata?.thinking,
-    source: msg.metadata?.source,
     created_at: msg.created_at,
   });
 
@@ -194,7 +261,6 @@ export default function ChatPage() {
         role: "assistant",
         content: data.content || data.error || "Sorry, I encountered an error.",
         thinking: data.thinking,
-        source: data.source,
         created_at: new Date().toISOString(),
       };
       setMessages((prev) => [...prev, assistantMessage]);
@@ -413,12 +479,7 @@ export default function ChatPage() {
                           </AvatarFallback>
                         </Avatar>
                         <div className="flex-1 pt-1">
-                          <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
-                          {message.role === "assistant" && message.source && (
-                            <p className="mt-1 text-[10px] text-zinc-400 dark:text-zinc-500">
-                              via {message.source}
-                            </p>
-                          )}
+                          <MessageContent content={message.content} />
                         </div>
                       </motion.div>
                     ))}

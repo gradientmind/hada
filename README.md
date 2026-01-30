@@ -74,7 +74,7 @@ supabase/
 ## Roadmap
 
 - [ ] Phase 1: Foundation (current)
-- [ ] Phase 2: Moltbot Integration
+- [ ] Phase 2: OpenClaw Integration
 - [ ] Phase 3: Core Integrations (Calendar, Email)
 - [ ] Phase 4: Polish & Beta
 - [ ] Phase 5: Monetization

@@ -1,7 +1,7 @@
 services:
   openclaw:
     build:
-      context: ./moltbot
+      context: ./openclaw
       dockerfile: Dockerfile
     ports:
       - "18789:18789"

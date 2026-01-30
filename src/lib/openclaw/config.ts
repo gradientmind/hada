@@ -12,9 +12,9 @@ function toWebSocketUrl(url: string): string {
   return url.replace(/^http:\/\//, 'ws://').replace(/^https:\/\//, 'wss://');
 }
 
-const rawGatewayUrl = process.env.OPENCLAW_GATEWAY_URL || process.env.MOLTBOT_GATEWAY_URL || DEFAULT_GATEWAY_URL;
+const rawGatewayUrl = process.env.OPENCLAW_GATEWAY_URL || DEFAULT_GATEWAY_URL;
 export const GATEWAY_URL = toWebSocketUrl(rawGatewayUrl);
-export const GATEWAY_TOKEN = process.env.OPENCLAW_GATEWAY_TOKEN || process.env.MOLTBOT_GATEWAY_TOKEN || 'hada-dev-token-12345';
+export const GATEWAY_TOKEN = process.env.OPENCLAW_GATEWAY_TOKEN || 'hada-dev-token-12345';
 export const LLM_PROVIDER = normalizeProvider(process.env.LLM_PROVIDER);
 export const LLM_API_KEY =
   process.env.LLM_API_KEY ||

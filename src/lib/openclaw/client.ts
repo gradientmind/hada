@@ -1,14 +1,14 @@
 /**
- * Moltbot Gateway Client
+ * OpenClaw Gateway Client
  *
- * Connects to the moltbot Gateway or falls back to direct LLM API.
- * This allows the chat to work even before moltbot is fully configured.
+ * Connects to the OpenClaw Gateway or falls back to direct LLM API.
+ * This allows the chat to work even before OpenClaw is fully configured.
  */
 
 import { LLM_API_KEY, LLM_PROVIDER, MINIMAX_BASE_URL, MINIMAX_MODEL } from './config';
 import { sendMessageViaWebSocket } from './websocket-client';
 
-export interface MoltbotResponse {
+export interface OpenClawResponse {
   content: string;
   thinking?: string;
   done: boolean;
@@ -46,21 +46,27 @@ function processThinkingTags(content: string): { content: string; thinking?: str
 
 /**
  * Send a message and get a response
- * Tries moltbot Gateway (WebSocket) first, falls back to direct LLM API
+ * Tries OpenClaw Gateway (WebSocket) first, falls back to direct LLM API
  */
 export async function sendMessage(
   message: string,
   sessionId: string,
-  userId: string
-): Promise<MoltbotResponse> {
-  // Try moltbot Gateway via WebSocket first
-  const gatewayAttempt = await tryGatewayWebSocket(message, sessionId);
+  userId: string,
+  userName?: string
+): Promise<OpenClawResponse> {
+  const trimmedName = userName?.trim();
+  const gatewayMessage = trimmedName
+    ? `User profile: name is ${trimmedName}.\n\nUser message: ${message}`
+    : message;
+
+  // Try OpenClaw Gateway via WebSocket first
+  const gatewayAttempt = await tryGatewayWebSocket(gatewayMessage, sessionId);
   if (gatewayAttempt.response) {
     return gatewayAttempt.response;
   }
 
   // Fallback to direct LLM API, but surface gateway error if it failed.
-  const fallback = await fallbackToLLM(message, sessionId, userId);
+  const fallback = await fallbackToLLM(message, sessionId, userId, trimmedName);
   if (gatewayAttempt.error) {
     return { ...fallback, gatewayError: gatewayAttempt.error };
   }
@@ -68,12 +74,12 @@ export async function sendMessage(
 }
 
 /**
- * Try to connect to moltbot Gateway via WebSocket
+ * Try to connect to OpenClaw Gateway via WebSocket
  */
 async function tryGatewayWebSocket(
   message: string,
   sessionId: string
-): Promise<{ response?: MoltbotResponse; error?: { code: string; message: string } }> {
+): Promise<{ response?: OpenClawResponse; error?: { code: string; message: string } }> {
   try {
     const result = await sendMessageViaWebSocket(message, sessionId);
 
@@ -121,8 +127,10 @@ async function tryGatewayWebSocket(
 async function fallbackToLLM(
   message: string,
   sessionId: string,
-  userId: string
-): Promise<MoltbotResponse> {
+  userId: string,
+  userName?: string
+): Promise<OpenClawResponse> {
+): Promise<OpenClawResponse> {
   if (!LLM_API_KEY) {
     return {
       content: "I'm not fully configured yet. Please set up the LLM API key in environment variables.",
@@ -136,7 +144,7 @@ async function fallbackToLLM(
     const systemPrompt = `You are Hada, a helpful AI assistant. You help users manage their calendar, draft emails, book appointments, do research, and handle tasks. Be concise, friendly, and proactive.
 
 Current session: ${sessionId}
-User ID: ${userId}`;
+User ID: ${userId}${userName ? `\nUser name: ${userName}` : ''}`;
 
     let response: Response;
 

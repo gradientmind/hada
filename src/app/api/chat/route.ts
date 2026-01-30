@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { sendMessage, checkHealth } from '@/lib/moltbot/client';
+import { sendMessage, checkHealth } from '@/lib/openclaw/client';
 import { getOrCreateConversation, saveMessage } from '@/lib/db/conversations';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -38,8 +38,9 @@ export async function POST(request: NextRequest) {
       message
     );
 
-    // Send message to moltbot (sessionKey = userId for single persistent session)
-    const response = await sendMessage(message, user.id, user.id);
+    // Send message to OpenClaw (sessionKey = userId for single persistent session)
+    const userName = user.user_metadata?.name || user.user_metadata?.full_name || user.email;
+    const response = await sendMessage(message, user.id, user.id, userName);
 
     // Save assistant message to database
     const assistantMessage = await saveMessage(
@@ -48,7 +49,6 @@ export async function POST(request: NextRequest) {
       'assistant',
       response.content,
       {
-        source: response.source,
         thinking: response.thinking,
         gatewayError: response.gatewayError,
       }
@@ -60,7 +60,6 @@ export async function POST(request: NextRequest) {
       thinking: response.thinking,
       role: 'assistant',
       conversationId: conversation.id,
-      source: response.source,
       error: response.error,
       gatewayError: response.gatewayError,
       userMessageId: userMessage.id,

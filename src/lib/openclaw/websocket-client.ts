@@ -1,7 +1,7 @@
 /**
- * Moltbot WebSocket Gateway Client
- * 
- * Implements the Moltbot gateway protocol for real-time communication.
+ * OpenClaw WebSocket Gateway Client
+ *
+ * Implements the OpenClaw gateway protocol for real-time communication.
  */
 
 import WebSocket from 'ws';
@@ -12,7 +12,7 @@ const PROTOCOL_VERSION = 3;
 const CONNECT_TIMEOUT_MS = 10000;
 const REQUEST_TIMEOUT_MS = 60000;
 
-interface MoltbotFrame {
+interface OpenClawFrame {
     type: 'req' | 'res' | 'event' | 'hello-ok';
     id?: string;
     method?: string;
@@ -41,8 +41,8 @@ export type GatewaySendResult =
     | { error: GatewayError; runId?: string };
 
 // Connection pool for reusing WebSocket connections
-let activeConnection: MoltbotConnection | null = null;
-let connectionPromise: Promise<MoltbotConnection> | null = null;
+let activeConnection: OpenClawConnection | null = null;
+let connectionPromise: Promise<OpenClawConnection> | null = null;
 
 // Reconnect state with exponential backoff
 let reconnectAttempts = 0;
@@ -65,7 +65,7 @@ function recordConnectionError(): void {
     lastConnectionError = new Date();
 }
 
-class MoltbotConnection {
+class OpenClawConnection {
     private ws: WebSocket | null = null;
     private requestId = 0;
     private pendingRequests: Map<string, {
@@ -111,7 +111,7 @@ class MoltbotConnection {
 
             this.ws.on('message', (data) => {
                 try {
-                    const frame: MoltbotFrame = JSON.parse(data.toString());
+                    const frame: OpenClawFrame = JSON.parse(data.toString());
 
                     // Handle connect response (handshake complete)
                     if (frame.type === 'res' && frame.id === 'connect-1') {
@@ -196,7 +196,7 @@ class MoltbotConnection {
 
         const id = `req-${++this.requestId}`;
 
-        const frame: MoltbotFrame = {
+        const frame: OpenClawFrame = {
             type: 'req',
             id,
             method: 'agent',
@@ -232,10 +232,10 @@ class MoltbotConnection {
 }
 
 /**
- * Get or create a connection to the Moltbot gateway
+ * Get or create a connection to the OpenClaw gateway
  * Uses exponential backoff on repeated connection failures.
  */
-async function getConnection(): Promise<MoltbotConnection> {
+async function getConnection(): Promise<OpenClawConnection> {
     // Return existing connection if healthy
     if (activeConnection?.isConnected()) {
         return activeConnection;
@@ -257,7 +257,7 @@ async function getConnection(): Promise<MoltbotConnection> {
 
     // Create new connection
     connectionPromise = (async () => {
-        const conn = new MoltbotConnection();
+        const conn = new OpenClawConnection();
         try {
             await conn.connect();
             activeConnection = conn;
@@ -276,7 +276,7 @@ async function getConnection(): Promise<MoltbotConnection> {
 }
 
 /**
- * Send a message through the Moltbot gateway via WebSocket
+ * Send a message through the OpenClaw gateway via WebSocket
  */
 export async function sendMessageViaWebSocket(
     message: string,
@@ -289,7 +289,7 @@ export async function sendMessageViaWebSocket(
 
         // sendAgentMessage now waits for 'ok' status
         if (response.status === 'ok' && response.result) {
-            // Check for payloads (standard moltbot response)
+            // Check for payloads (standard OpenClaw response)
             if (Array.isArray(response.result.payloads) && response.result.payloads.length > 0) {
                 const text = response.result.payloads[0].text;
                 if (text) return { content: text, runId: response.runId };
@@ -301,7 +301,7 @@ export async function sendMessageViaWebSocket(
             };
         } else if (response.status === 'error') {
             const message = response.error || 'Gateway reported an error.';
-            console.error('[MoltbotWS] Agent returned error:', message);
+            console.error('[OpenClawWS] Agent returned error:', message);
             return { error: { code: 'gateway_agent_error', message }, runId: response.runId };
         }
 

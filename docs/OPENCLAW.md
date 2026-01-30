@@ -10,7 +10,7 @@ Hada uses [OpenClaw](https://github.com/openclaw/openclaw) as its AI gateway. Op
 ┌─────────────────────────────────────────────────────────┐
 │                    Hada Next.js App                      │
 │  ┌────────────────────────────────────────────────────┐ │
-│  │  src/lib/moltbot/websocket-client.ts               │ │
+│  │  src/lib/openclaw/websocket-client.ts              │ │
 │  │  - WebSocket protocol implementation               │ │
 │  │  - Connection pooling & reconnect logic            │ │
 │  │  - Exponential backoff (1s → 30s max)              │ │
@@ -130,7 +130,7 @@ OpenClaw sends two responses per agent request:
 
 ## Configuration
 
-### OpenClaw Config (`moltbot/config/openclaw.json`)
+### OpenClaw Config (`openclaw/config/openclaw.json`)
 
 ```json
 {
@@ -200,7 +200,7 @@ CMD ["sh", "-c", "OPENCLAW_SKIP_CHANNELS=1 node openclaw.mjs gateway --port 1878
 
 1. **Create OpenClaw service:**
    - Deploy from GitHub repo
-   - Set Root Directory to `moltbot`
+   - Set Root Directory to `openclaw`
    - Add environment variables
 
 2. **Configure Next.js service:**

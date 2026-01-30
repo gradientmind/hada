@@ -1,5 +1,5 @@
-import { checkHealth } from '@/lib/moltbot/client';
-import { GATEWAY_URL } from '@/lib/moltbot/config';
+import { checkHealth } from '@/lib/openclaw/client';
+import { GATEWAY_URL } from '@/lib/openclaw/config';
 import { NextResponse } from 'next/server';
 
 export interface HealthStatus {

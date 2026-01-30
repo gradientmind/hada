@@ -155,4 +155,4 @@ After setup, you can:
 
 1. Create an account at `/auth/signup`
 2. Access the chat interface at `/chat`
-3. Start building Phase 2 (Moltbot integration)
+3. Start building Phase 2 (OpenClaw integration)

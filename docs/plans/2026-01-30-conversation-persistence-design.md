@@ -2,12 +2,12 @@
 
 ## Overview
 
-Add message persistence to Supabase and proper session management for moltbot gateway. Single continuous conversation per user (WhatsApp/Telegram style).
+Add message persistence to Supabase and proper session management for OpenClaw gateway. Single continuous conversation per user (WhatsApp/Telegram style).
 
 ## Design Decisions
 
 - **Single conversation per user** - No multi-conversation UI. One ongoing thread per user.
-- **Trust moltbot memory** - Gateway maintains context via `sessionKey = userId`. DB is for UI display, not context replay.
+- **Trust OpenClaw memory** - Gateway maintains context via `sessionKey = userId`. DB is for UI display, not context replay.
 - **Load last 25 messages** - On page load. Lazy load older on scroll-up.
 - **DB is source of display** - Messages stored for history viewing, backup, analytics.
 
@@ -22,7 +22,7 @@ Get/create conversation for user
     ↓
 Save user message to DB
     ↓
-Send to moltbot (sessionKey = userId)
+Send to OpenClaw (sessionKey = userId)
     ↓
 Receive response
     ↓
@@ -53,7 +53,7 @@ getRecentMessages(conversationId: string, limit: number, before?: string): Promi
 
 **`src/app/api/chat/route.ts`**
 - Get/create conversation before processing
-- Save user message before sending to moltbot
+- Save user message before sending to OpenClaw
 - Save assistant message after receiving response
 - Return conversationId in response
 
@@ -76,9 +76,9 @@ interface MessageMetadata {
 
 ### Session Mapping
 
-- `sessionKey` for moltbot gateway = `userId`
-- One persistent moltbot session per user
-- Moltbot handles conversation context internally
+- `sessionKey` for OpenClaw gateway = `userId`
+- One persistent OpenClaw session per user
+- OpenClaw handles conversation context internally
 - If context needs rebuilding later, can add history replay (not in scope now)
 
 ## Database
@@ -90,6 +90,6 @@ Uses existing schema from `001_initial_schema.sql`:
 
 ## Future Considerations
 
-- History replay to moltbot if gateway loses context (not needed yet)
+- History replay to OpenClaw if gateway loses context (not needed yet)
 - "Clear conversation" / "Start fresh" action (add later if requested)
 - Search within conversation history

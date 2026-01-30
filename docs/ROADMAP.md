@@ -53,7 +53,7 @@ Hada is "Bot as a Service" (BaaS) - anyone can sign up and get their own AI assi
   - Configure for headless server operation (--bind lan)
   - Set up environment variables
 - [x] Deploy OpenClaw container to Railway
-  - Migrated from moltbot to openclaw/openclaw repo
+  - Migrated from legacy gateway to openclaw/openclaw repo
   - Fixed config format (agents.defaults.model.primary)
   - Gateway binds to 0.0.0.0 for internal networking
 - [x] Build WebSocket bridge service

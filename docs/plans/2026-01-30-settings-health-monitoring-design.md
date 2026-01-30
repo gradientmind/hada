@@ -46,12 +46,12 @@ Add a settings page with tabbed navigation showing bot server status, and implem
 - `src/components/settings/status-tab.tsx` - Bot status display
 - `src/components/settings/integrations-tab.tsx` - Placeholder
 - `src/components/settings/account-tab.tsx` - Placeholder
-- `src/lib/moltbot/connection-manager.ts` - Reconnect logic & state
+- `src/lib/openclaw/connection-manager.ts` - Reconnect logic & state
 - `src/app/api/health/route.ts` - Dedicated health endpoint
 
 ### Modified Files
 
-- `src/lib/moltbot/websocket-client.ts` - Add reconnect logic
+- `src/lib/openclaw/websocket-client.ts` - Add reconnect logic
 - `src/app/chat/page.tsx` - Use connection manager, show reconnecting state
 
 ### UI Components

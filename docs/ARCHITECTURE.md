@@ -172,7 +172,7 @@ Dedicated Instance:
 ### Horizontal Scaling
 
 - Next.js app scales automatically on Railway
-- Add moltbot instances as demand grows
+- Add OpenClaw instances as demand grows
 - Load balancer distributes requests
 
 ### Database Scaling

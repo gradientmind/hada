@@ -2,7 +2,6 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import type { Conversation, Message } from '@/lib/types/database';
 
 export interface MessageMetadata {
-  source?: 'gateway' | 'fallback';
   thinking?: string;
   runId?: string;
   gatewayError?: { code: string; message: string };
