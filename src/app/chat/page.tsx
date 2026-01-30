@@ -299,7 +299,7 @@ export default function ChatPage() {
         <div className="h-full flex flex-col max-w-3xl mx-auto px-4">
 
           {/* Messages Area */}
-          <div className="flex-1 py-4">
+          <div className="flex-1 min-h-0 py-4">
             <ScrollArea
               className="h-full"
               ref={scrollAreaRef}
@@ -311,7 +311,7 @@ export default function ChatPage() {
                 }
               }}
             >
-              <div className="space-y-6 pb-4">
+              <div className="space-y-6 pb-6">
                 {isLoadingMore && (
                   <div className="flex justify-center py-2">
                     <span className="text-sm text-zinc-400">Loading earlier messages...</span>
@@ -417,9 +417,9 @@ export default function ChatPage() {
             </ScrollArea>
           </div>
 
-          {/* Input Area - Sticky once there are messages */}
+          {/* Input Area - Fixed at bottom when there are messages */}
           {messages.length > 0 && (
-            <div className="sticky bottom-0 -mx-4 px-4 pb-[max(env(safe-area-inset-bottom),1rem)] pt-3 bg-gradient-to-t from-zinc-50 via-zinc-50/95 to-transparent dark:from-zinc-950 dark:via-zinc-950/95">
+            <div className="shrink-0 pb-[max(env(safe-area-inset-bottom),1rem)] pt-3 bg-zinc-50 dark:bg-zinc-950 border-t border-zinc-200 dark:border-zinc-800">
               {inputForm}
             </div>
           )}
