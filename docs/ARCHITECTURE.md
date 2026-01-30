@@ -2,7 +2,7 @@
 
 ## Overview
 
-Hada is a multi-tenant SaaS that provides AI assistant capabilities by wrapping moltbot. The architecture prioritizes:
+Hada is a multi-tenant SaaS that provides AI assistant capabilities by wrapping OpenClaw. The architecture prioritizes:
 
 1. **Simplicity** - Solo founder friendly, minimal operational overhead
 2. **Cost efficiency** - Shared infrastructure for lower tiers
@@ -33,7 +33,7 @@ Hada is a multi-tenant SaaS that provides AI assistant capabilities by wrapping 
 │                                  ▼                                   │
 │  ┌────────────────────────────────────────────────────────────────┐ │
 │  │                   Orchestration Layer                           │ │
-│  │         (Routes users to correct moltbot instance)              │ │
+│  │         (Routes users to correct OpenClaw instance)             │ │
 │  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐  │ │
 │  │  │ User Router  │  │ Load Balancer│  │  Instance Manager    │  │ │
 │  │  └──────────────┘  └──────────────┘  └──────────────────────┘  │ │
@@ -42,7 +42,7 @@ Hada is a multi-tenant SaaS that provides AI assistant capabilities by wrapping 
 │          ┌───────────────────────┼───────────────────────┐          │
 │          ▼                       ▼                       ▼          │
 │  ┌──────────────┐       ┌──────────────┐       ┌──────────────┐    │
-│  │   Moltbot    │       │   Moltbot    │       │   Moltbot    │    │
+│  │   OpenClaw   │       │   OpenClaw   │       │   OpenClaw   │    │
 │  │  Instance 1  │       │  Instance 2  │       │  Instance N  │    │
 │  │   (Shared)   │       │   (Shared)   │       │ (Dedicated)  │    │
 │  └──────────────┘       └──────────────┘       └──────────────┘    │
@@ -81,16 +81,19 @@ User → Login Page → Supabase Auth → Session Cookie → Middleware validate
 ### Chat Message Flow
 
 ```
-User Input → Next.js API → Orchestration → Moltbot Gateway → LLM → Response → UI Update
+User Input → Next.js API → OpenClaw Gateway → LLM → Response → UI Update
+                ↓ (fallback)
+            Direct LLM API
 ```
 
 1. User types message in chat UI
 2. Message sent to Next.js API route
-3. Orchestration layer routes to correct moltbot instance
-4. Moltbot processes via its Gateway (WebSocket)
+3. API attempts OpenClaw Gateway connection via WebSocket
+4. OpenClaw processes request and calls configured LLM
 5. LLM generates response
-6. Response streamed back through same path
+6. Response returned through WebSocket
 7. UI updates with assistant message
+8. If gateway unavailable, fallback to direct LLM API call
 
 ### Data Storage
 

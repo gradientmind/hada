@@ -40,25 +40,28 @@ Hada is "Bot as a Service" (BaaS) - anyone can sign up and get their own AI assi
 
 ---
 
-## Phase 2: Moltbot Integration
+## Phase 2: OpenClaw Integration
 
-**Status:** In Progress
+**Status:** Complete ✅
 
-**Goal:** Connect the UI to moltbot for actual AI capabilities
+**Goal:** Connect the UI to OpenClaw for actual AI capabilities
 
 ### Tasks
 
-- [x] Create Dockerfile for moltbot
+- [x] Create Dockerfile for OpenClaw
   - Base image with Node 22+
-  - Configure for headless server operation
+  - Configure for headless server operation (--bind lan)
   - Set up environment variables
-- [ ] Deploy moltbot container to Railway
+- [x] Deploy OpenClaw container to Railway
+  - Migrated from moltbot to openclaw/openclaw repo
+  - Fixed config format (agents.defaults.model.primary)
+  - Gateway binds to 0.0.0.0 for internal networking
 - [x] Build WebSocket bridge service
-  - Proxy WebSocket from Next.js to moltbot Gateway
-  - Handle authentication mapping
+  - Proxy WebSocket from Next.js to OpenClaw Gateway
+  - Handle authentication mapping (OPENCLAW_GATEWAY_TOKEN)
 - [x] Implement user session isolation
   - Namespace conversations by user ID (sessionKey = userId)
-  - Store context per user (moltbot handles context, DB for display)
+  - Store context per user (OpenClaw handles context, DB for display)
 - [x] Conversation persistence
   - Messages stored to Supabase
   - Load last 25 messages on page load
@@ -75,7 +78,7 @@ Hada is "Bot as a Service" (BaaS) - anyone can sign up and get their own AI assi
 ### Architecture
 
 ```
-Next.js App ──WebSocket──▶ Bridge Service ──WebSocket──▶ Moltbot Gateway
+Next.js App ──WebSocket──▶ OpenClaw Gateway (Railway)
      │                           │
      │                           ▼
      │                    Session Router
@@ -87,9 +90,10 @@ Next.js App ──WebSocket──▶ Bridge Service ──WebSocket──▶ Mol
 
 ### Success Criteria
 
-- Users can chat with moltbot through Hada UI
-- Messages persist to database
-- Sessions survive page refresh
+- ✅ Users can chat with OpenClaw through Hada UI
+- ✅ Messages persist to database
+- ✅ Sessions survive page refresh
+- ✅ Fallback to direct LLM when gateway unavailable
 
 ---
 
