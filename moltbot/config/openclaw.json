@@ -19,9 +19,6 @@
     }
   },
   "gateway": {
-    "port": 18789,
-    "auth": {
-      "token": "${OPENCLAW_AUTH_TOKEN}"
-    }
+    "port": 18789
   }
 }

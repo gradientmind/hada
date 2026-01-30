@@ -9,7 +9,7 @@ services:
       - .env.local
     environment:
       - MINIMAX_API_KEY=${MINIMAX_API_KEY}
-      - OPENCLAW_AUTH_TOKEN=${OPENCLAW_AUTH_TOKEN:-hada-dev-token-12345}
+      - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:-hada-dev-token-12345}
     volumes:
       - openclaw-data:/root/.openclaw/data
     restart: unless-stopped
