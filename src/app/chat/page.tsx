@@ -71,7 +71,19 @@ function MessageContent({ content }: { content: string }) {
   };
 
   lines.forEach((line, index) => {
+    const headingMatch = line.match(/^\s{0,3}#{1,6}\s+(.*)$/);
     const listMatch = line.match(/^\s*[-*]\s+(.*)$/);
+    if (headingMatch) {
+      flushParagraph();
+      flushList();
+      blocks.push(
+        <p key={`h-${keyIndex++}`} className="text-sm font-semibold">
+          {renderInlineBold(headingMatch[1])}
+        </p>
+      );
+      return;
+    }
+
     if (listMatch) {
       flushParagraph();
       listItems.push(

@@ -62,6 +62,13 @@ supabase/
 └── migrations/         # Database migrations
 ```
 
+## Chat Formatting
+
+The chat UI renders a small subset of Markdown for readability:
+- `**bold**` for emphasis
+- `-` or `*` for bullet lists
+- `#` / `##` / `###` headings are shown as styled section titles (hashes are not displayed)
+
 ## Tech Stack
 
 - **Framework:** Next.js 14 (App Router)
