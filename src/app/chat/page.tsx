@@ -19,6 +19,13 @@ interface Message {
   content: string;
   thinking?: string;
   cards?: any[];
+  confirmation?: {
+    pending: boolean;
+    function?: {
+      name: string;
+      arguments: Record<string, any>;
+    };
+  };
   created_at: string;
 }
 
@@ -30,6 +37,13 @@ interface ApiMessage {
   metadata: {
     thinking?: string;
     cards?: any[];
+    confirmation?: {
+      pending?: boolean;
+      function?: {
+        name?: string;
+        arguments?: Record<string, any>;
+      };
+    };
   } | null;
   created_at: string;
 }
@@ -143,6 +157,17 @@ export default function ChatPage() {
     content: msg.content,
     thinking: msg.metadata?.thinking,
     cards: msg.metadata?.cards,
+    confirmation: msg.metadata?.confirmation?.pending
+      ? {
+          pending: true,
+          function: msg.metadata?.confirmation?.function
+            ? {
+                name: msg.metadata.confirmation.function.name || "",
+                arguments: msg.metadata.confirmation.function.arguments || {},
+              }
+            : undefined,
+        }
+      : undefined,
     created_at: msg.created_at,
   });
 
@@ -234,19 +259,22 @@ export default function ChatPage() {
     autosizeTextarea();
   }, [input]);
 
-  const sendMessage = async () => {
-    if (!input.trim() || isLoading) return;
+  const sendMessage = async (overrideMessage?: string) => {
+    const messageText = overrideMessage ?? input;
+    if (!messageText.trim() || isLoading) return;
 
     const tempId = `temp-${Date.now()}`;
     const userMessage: Message = {
       id: tempId,
       role: "user",
-      content: input.trim(),
+      content: messageText.trim(),
       created_at: new Date().toISOString(),
     };
 
     setMessages((prev) => [...prev, userMessage]);
-    setInput("");
+    if (!overrideMessage) {
+      setInput("");
+    }
     setIsLoading(true);
 
     try {
@@ -278,6 +306,17 @@ export default function ChatPage() {
         content: data.content || data.error || "Sorry, I encountered an error.",
         thinking: data.thinking,
         cards: data.cards,
+        confirmation: data.confirmation?.pending
+          ? {
+              pending: true,
+              function: data.confirmation?.function
+                ? {
+                    name: data.confirmation.function.name || "",
+                    arguments: data.confirmation.function.arguments || {},
+                  }
+                : undefined,
+            }
+          : undefined,
         created_at: new Date().toISOString(),
       };
       setMessages((prev) => [...prev, assistantMessage]);
@@ -294,6 +333,14 @@ export default function ChatPage() {
       setIsLoading(false);
       setIsThinking(false);
     }
+  };
+
+  const handleQuickReply = (text: string) => {
+    void sendMessage(text);
+    requestAnimationFrame(() => {
+      autosizeTextarea();
+      scrollToBottom();
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -520,6 +567,29 @@ export default function ChatPage() {
                             }
                             return null;
                           })}
+                          {message.role === "assistant" && message.confirmation?.pending && (
+                            <div className="flex flex-wrap gap-2">
+                              <Button
+                                type="button"
+                                size="sm"
+                                className="rounded-full"
+                                onClick={() => handleQuickReply("confirm")}
+                                disabled={isLoading}
+                              >
+                                Confirm
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="rounded-full"
+                                onClick={() => handleQuickReply("cancel")}
+                                disabled={isLoading}
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                          )}
                         </div>
                       </motion.div>
                     ))}

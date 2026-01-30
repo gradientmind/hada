@@ -8,12 +8,14 @@ const CONFIRM_REGEX = /^(yes|y|confirm|ok|okay|sure|go ahead|do it|please do)\b/
 const CANCEL_REGEX = /^(no|n|cancel|stop|don'?t|do not|never mind|nevermind)\b/i;
 
 function buildConfirmationPrompt(action: string, args: Record<string, any>) {
+  const start = args.start || args.start_date;
+  const end = args.end || args.end_date;
+  const formattedRange = formatDateRange(start, end);
+
   if (action === 'create_calendar_event') {
     const summary = args.summary ? `"${args.summary}"` : 'this event';
-    const start = args.start || args.start_date;
-    const end = args.end || args.end_date;
-    const timeRange = start && end ? ` (${start} → ${end})` : '';
-    return `I can create the event ${summary}${timeRange}. Reply "confirm" to proceed or "cancel" to skip.`;
+    const timeRange = formattedRange ? ` on ${formattedRange}` : '';
+    return `I can create the event ${summary}${timeRange}. Confirm or cancel?`;
   }
 
   if (action === 'update_calendar_event') {
@@ -24,7 +26,30 @@ function buildConfirmationPrompt(action: string, args: Record<string, any>) {
     return `I can delete that calendar event. Reply "confirm" to proceed or "cancel" to skip.`;
   }
 
-  return `This action needs confirmation. Reply "confirm" to proceed or "cancel" to skip.`;
+  return `This action needs confirmation. Confirm or cancel?`;
+}
+
+function formatDateRange(startIso?: string, endIso?: string) {
+  if (!startIso || !endIso) return '';
+  const start = new Date(startIso);
+  const end = new Date(endIso);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return '';
+
+  const date = start.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+  const startTime = start.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+  const endTime = end.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+
+  return `${date}, ${startTime}-${endTime}`;
 }
 
 export async function POST(request: NextRequest) {
@@ -200,12 +225,14 @@ export async function POST(request: NextRequest) {
         supabase,
         conversation.id,
         'assistant',
-        reminderText
+        reminderText,
+        { confirmation: pendingConfirmation }
       );
 
       return NextResponse.json({
         id: assistantMessage.id,
         content: reminderText,
+        confirmation: pendingConfirmation,
         role: 'assistant',
         conversationId: conversation.id,
         userMessageId: userMessage.id,
@@ -251,6 +278,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({
               id: assistantMessage.id,
               content: promptText,
+              confirmation: confirmationPayload,
               role: 'assistant',
               conversationId: conversation.id,
               userMessageId: userMessage.id,
