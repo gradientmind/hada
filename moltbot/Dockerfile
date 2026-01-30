@@ -44,4 +44,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
 
 # Start Gateway (gateway:dev skips channel integrations)
 # --bind 0.0.0.0 allows connections from other Railway services
-CMD ["sh", "-c", "OPENCLAW_SKIP_CHANNELS=1 node dist/cli/openclaw.mjs gateway --port 18789 --bind 0.0.0.0 --verbose"]
+CMD ["sh", "-c", "OPENCLAW_SKIP_CHANNELS=1 node openclaw.mjs gateway --port 18789 --bind 0.0.0.0 --verbose"]
