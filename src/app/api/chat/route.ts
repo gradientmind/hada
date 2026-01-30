@@ -42,6 +42,7 @@ export async function POST(request: NextRequest) {
       sessionId,
       source: response.source,
       error: response.error,
+      gatewayError: response.gatewayError,
     });
   } catch (error) {
     console.error('Chat API error:', error);

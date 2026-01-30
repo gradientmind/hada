@@ -6,9 +6,11 @@
 
 import WebSocket from 'ws';
 
-const GATEWAY_URL = process.env.MOLTBOT_GATEWAY_URL || 'ws://localhost:18789';
-const GATEWAY_TOKEN = process.env.MOLTBOT_GATEWAY_TOKEN || 'hada-dev-token-12345';
+import { GATEWAY_TOKEN, GATEWAY_URL } from './config';
+
 const PROTOCOL_VERSION = 3;
+const CONNECT_TIMEOUT_MS = 10000;
+const REQUEST_TIMEOUT_MS = 60000;
 
 interface MoltbotFrame {
     type: 'req' | 'res' | 'event' | 'hello-ok';
@@ -33,6 +35,11 @@ interface AgentResponse {
     error?: string;
 }
 
+export type GatewayError = { code: string; message: string };
+export type GatewaySendResult =
+    | { content: string; runId: string }
+    | { error: GatewayError; runId?: string };
+
 // Connection pool for reusing WebSocket connections
 let activeConnection: MoltbotConnection | null = null;
 let connectionPromise: Promise<MoltbotConnection> | null = null;
@@ -55,7 +62,7 @@ class MoltbotConnection {
             const timeout = setTimeout(() => {
                 this.close();
                 reject(new Error('Connection timeout'));
-            }, 10000);
+            }, CONNECT_TIMEOUT_MS);
 
             this.ws.on('open', () => {
                 this.connected = true;
@@ -183,7 +190,7 @@ class MoltbotConnection {
             const timeout = setTimeout(() => {
                 this.pendingRequests.delete(id);
                 reject(new Error('Request timeout'));
-            }, 60000); // 60s timeout for agent responses
+            }, REQUEST_TIMEOUT_MS); // 60s timeout for agent responses
 
             this.pendingRequests.set(id, {
                 resolve: resolve as (value: unknown) => void,
@@ -241,7 +248,7 @@ async function getConnection(): Promise<MoltbotConnection> {
 export async function sendMessageViaWebSocket(
     message: string,
     sessionId?: string
-): Promise<{ content: string; runId: string } | null> {
+): Promise<GatewaySendResult | null> {
     try {
         const conn = await getConnection();
         const response = await conn.sendAgentMessage(message, sessionId);
@@ -260,14 +267,17 @@ export async function sendMessageViaWebSocket(
                 runId: response.runId,
             };
         } else if (response.status === 'error') {
-            console.error('[MoltbotWS] Agent returned error:', response.error);
+            const message = response.error || 'Gateway reported an error.';
+            console.error('[MoltbotWS] Agent returned error:', message);
+            return { error: { code: 'gateway_agent_error', message }, runId: response.runId };
         }
 
 
         return null;
     } catch (error) {
-        console.error('WebSocket gateway error:', error);
-        return null;
+        const message = error instanceof Error ? error.message : 'Unknown gateway error';
+        console.error('WebSocket gateway error:', message);
+        return { error: { code: 'gateway_connection_error', message } };
     }
 }
 

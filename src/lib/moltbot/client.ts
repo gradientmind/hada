@@ -5,23 +5,15 @@
  * This allows the chat to work even before moltbot is fully configured.
  */
 
+import { LLM_API_KEY, LLM_PROVIDER, MINIMAX_BASE_URL, MINIMAX_MODEL } from './config';
 import { sendMessageViaWebSocket } from './websocket-client';
-
-const GATEWAY_URL = process.env.MOLTBOT_GATEWAY_URL || 'ws://localhost:18789';
-const LLM_PROVIDER = (process.env.LLM_PROVIDER || 'minimax').split('#')[0]?.trim() || 'minimax';
-const LLM_API_KEY =
-  process.env.LLM_API_KEY ||
-  (LLM_PROVIDER === 'minimax' ? process.env.MINIMAX_API_KEY : undefined) ||
-  (LLM_PROVIDER === 'anthropic' ? process.env.ANTHROPIC_API_KEY : undefined) ||
-  (LLM_PROVIDER === 'openai' ? process.env.OPENAI_API_KEY : undefined);
-const MINIMAX_BASE_URL = (process.env.MINIMAX_BASE_URL || 'https://api.minimax.io/v1').replace(/\/+$/, '');
-const MINIMAX_MODEL = process.env.MINIMAX_MODEL || 'MiniMax-M2.1';
 
 export interface MoltbotResponse {
   content: string;
   thinking?: string;
   done: boolean;
   error?: string;
+  gatewayError?: { code: string; message: string };
   source: 'gateway' | 'fallback';
 }
 
@@ -62,13 +54,17 @@ export async function sendMessage(
   userId: string
 ): Promise<MoltbotResponse> {
   // Try moltbot Gateway via WebSocket first
-  const gatewayResponse = await tryGatewayWebSocket(message, sessionId);
-  if (gatewayResponse) {
-    return gatewayResponse;
+  const gatewayAttempt = await tryGatewayWebSocket(message, sessionId);
+  if (gatewayAttempt.response) {
+    return gatewayAttempt.response;
   }
 
-  // Fallback to direct LLM API
-  return await fallbackToLLM(message, sessionId, userId);
+  // Fallback to direct LLM API, but surface gateway error if it failed.
+  const fallback = await fallbackToLLM(message, sessionId, userId);
+  if (gatewayAttempt.error) {
+    return { ...fallback, gatewayError: gatewayAttempt.error };
+  }
+  return fallback;
 }
 
 /**
@@ -77,24 +73,45 @@ export async function sendMessage(
 async function tryGatewayWebSocket(
   message: string,
   sessionId: string
-): Promise<MoltbotResponse | null> {
+): Promise<{ response?: MoltbotResponse; error?: { code: string; message: string } }> {
   try {
     const result = await sendMessageViaWebSocket(message, sessionId);
 
-    if (result) {
-      const processed = processThinkingTags(result.content);
+    if (result?.error) {
       return {
-        content: processed.content,
-        thinking: processed.thinking,
-        done: true,
-        source: 'gateway',
+        error: {
+          code: result.error.code,
+          message: result.error.message,
+        },
       };
     }
 
-    return null;
+    if (result?.content) {
+      const processed = processThinkingTags(result.content);
+      return {
+        response: {
+          content: processed.content,
+          thinking: processed.thinking,
+          done: true,
+          source: 'gateway',
+        },
+      };
+    }
+
+    return {
+      error: {
+        code: 'gateway_empty_response',
+        message: 'Gateway returned an empty response.',
+      },
+    };
   } catch (error) {
     console.error('WebSocket gateway error:', error);
-    return null;
+    return {
+      error: {
+        code: 'gateway_exception',
+        message: error instanceof Error ? error.message : 'Unknown gateway error',
+      },
+    };
   }
 }
 
