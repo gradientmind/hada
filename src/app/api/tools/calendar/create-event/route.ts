@@ -6,6 +6,7 @@ import {
 } from "@/lib/tool-auth";
 import { ensureValidGoogleToken } from "@/lib/google/tokens";
 import { createCalendarEvent } from "@/lib/google/calendar";
+import { createAdminClient } from "@/lib/supabase/server";
 
 /**
  * Create calendar event
@@ -78,7 +79,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 4. Get valid access token (auto-refresh if needed)
-    const accessToken = await ensureValidGoogleToken(userId);
+    const accessToken = await ensureValidGoogleToken(userId, createAdminClient());
     if (!accessToken) {
       return NextResponse.json(
         {

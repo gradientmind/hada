@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { hasGoogleIntegration } from "@/lib/google/tokens";
+import { createAdminClient } from "@/lib/supabase/server";
 import { checkPermission, type PermissionKey } from "@/lib/permissions";
 
 export interface ToolRequest {
@@ -91,7 +92,7 @@ export async function verifyGoogleIntegration(userId: string): Promise<
       error: ToolError;
     }
 > {
-  const hasIntegration = await hasGoogleIntegration(userId);
+  const hasIntegration = await hasGoogleIntegration(userId, createAdminClient());
 
   if (!hasIntegration) {
     return {

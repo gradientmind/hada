@@ -1,5 +1,6 @@
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient, createClient } from "@/lib/supabase/server";
 import { GOOGLE_OAUTH_CONFIG } from "./config";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 export interface GoogleTokens {
   accessToken: string;
@@ -12,9 +13,10 @@ export interface GoogleTokens {
  * Get Google OAuth tokens for a user from the database
  */
 export async function getGoogleTokens(
-  userId: string
+  userId: string,
+  supabaseClient?: SupabaseClient
 ): Promise<GoogleTokens | null> {
-  const supabase = await createClient();
+  const supabase = supabaseClient ?? (await createClient());
 
   const { data, error } = await supabase
     .from("integrations")
@@ -90,9 +92,10 @@ export async function refreshGoogleToken(
 export async function updateGoogleTokens(
   userId: string,
   accessToken: string,
-  expiresAt: Date
+  expiresAt: Date,
+  supabaseClient?: SupabaseClient
 ): Promise<boolean> {
-  const supabase = await createClient();
+  const supabase = supabaseClient ?? (await createClient());
 
   const { error } = await supabase
     .from("integrations")
@@ -116,9 +119,10 @@ export async function updateGoogleTokens(
  * Ensure we have a valid access token, refreshing if necessary
  */
 export async function ensureValidGoogleToken(
-  userId: string
+  userId: string,
+  supabaseClient?: SupabaseClient
 ): Promise<string | null> {
-  const tokens = await getGoogleTokens(userId);
+  const tokens = await getGoogleTokens(userId, supabaseClient);
 
   if (!tokens) {
     return null;
@@ -135,7 +139,7 @@ export async function ensureValidGoogleToken(
   if (!refreshed) {
     // Refresh failed - token likely revoked
     // Mark integration as disconnected by deleting it
-    const supabase = await createClient();
+    const supabase = supabaseClient ?? (await createClient());
     await supabase
       .from("integrations")
       .delete()
@@ -149,7 +153,8 @@ export async function ensureValidGoogleToken(
   const updated = await updateGoogleTokens(
     userId,
     refreshed.accessToken,
-    refreshed.expiresAt
+    refreshed.expiresAt,
+    supabaseClient
   );
 
   if (!updated) {
@@ -162,8 +167,11 @@ export async function ensureValidGoogleToken(
 /**
  * Delete Google integration for a user (disconnect)
  */
-export async function deleteGoogleIntegration(userId: string): Promise<boolean> {
-  const supabase = await createClient();
+export async function deleteGoogleIntegration(
+  userId: string,
+  supabaseClient?: SupabaseClient
+): Promise<boolean> {
+  const supabase = supabaseClient ?? (await createClient());
 
   const { error } = await supabase
     .from("integrations")
@@ -182,7 +190,14 @@ export async function deleteGoogleIntegration(userId: string): Promise<boolean> 
 /**
  * Check if user has Google integration connected
  */
-export async function hasGoogleIntegration(userId: string): Promise<boolean> {
-  const tokens = await getGoogleTokens(userId);
+export async function hasGoogleIntegration(
+  userId: string,
+  supabaseClient?: SupabaseClient
+): Promise<boolean> {
+  const tokens = await getGoogleTokens(userId, supabaseClient);
   return tokens !== null;
+}
+
+export async function hasGoogleIntegrationAdmin(userId: string): Promise<boolean> {
+  return hasGoogleIntegration(userId, createAdminClient());
 }
