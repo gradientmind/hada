@@ -235,17 +235,25 @@ export async function executeFunction(
   }
 
   const token = process.env.OPENCLAW_API_TOKEN;
-  console.log("[Execute Function] Token present:", !!token, "Length:", token?.length || 0);
   console.log("[Execute Function] Calling:", url);
   console.log("[Execute Function] User ID:", userId);
 
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "X-Session-Key": userId,
+  };
+
+  // Add auth token if available
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+    console.log("[Execute Function] Auth token included");
+  } else {
+    console.log("[Execute Function] No auth token available");
+  }
+
   const response = await fetch(url, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token || ""}`,
-      "X-Session-Key": userId,
-    },
+    headers,
     body: JSON.stringify(functionCall.arguments),
   });
 

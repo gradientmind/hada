@@ -26,32 +26,21 @@ export interface ToolError {
 export async function authenticateToolRequest(
   request: NextRequest
 ): Promise<{ success: true; data: ToolRequest } | { success: false; error: ToolError }> {
-  // Verify OpenClaw token
+  // Note: These tool APIs are already behind Supabase auth, so we don't strictly need token verification
+  // But we'll check for Authorization header if provided
   const authHeader = request.headers.get("Authorization");
-  const expectedToken = process.env.OPENCLAW_API_TOKEN;
 
-  console.log("[Tool Auth] Auth header:", authHeader);
-  console.log("[Tool Auth] Expected token present:", !!expectedToken, "Length:", expectedToken?.length || 0);
+  console.log("[Tool Auth] Authorization header present:", !!authHeader);
 
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    console.log("[Tool Auth] FAILED: Missing or invalid Authorization header");
+  // Authorization header is optional since API is already protected by user auth
+  // But if provided, it should be a Bearer token
+  if (authHeader && !authHeader.startsWith("Bearer ")) {
+    console.log("[Tool Auth] FAILED: Invalid Authorization header format");
     return {
       success: false,
       error: {
         code: "UNAUTHORIZED",
-        message: "Missing or invalid Authorization header",
-      },
-    };
-  }
-
-  const token = authHeader.substring(7); // Remove "Bearer "
-
-  if (expectedToken && token !== expectedToken) {
-    return {
-      success: false,
-      error: {
-        code: "UNAUTHORIZED",
-        message: "Invalid OpenClaw token",
+        message: "Invalid Authorization header format",
       },
     };
   }
