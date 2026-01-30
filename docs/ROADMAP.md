@@ -63,9 +63,14 @@ Hada is "Bot as a Service" (BaaS) - anyone can sign up and get their own AI assi
   - Messages stored to Supabase
   - Load last 25 messages on page load
   - Lazy load older messages on scroll
-- [ ] Add health monitoring
-  - Instance health checks
-  - Auto-restart on failure
+- [x] Add health monitoring
+  - /api/health endpoint with detailed status
+  - Connection status indicator in chat header
+  - Auto-reconnect with exponential backoff
+- [x] Settings page
+  - Status tab with gateway/fallback health
+  - Integrations tab placeholder
+  - Account tab placeholder
 
 ### Architecture
 
