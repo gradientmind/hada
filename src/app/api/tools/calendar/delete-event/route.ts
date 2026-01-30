@@ -57,7 +57,8 @@ export async function POST(request: NextRequest) {
       {
         action: "delete_calendar_event",
         eventId,
-      }
+      },
+      { confirmed: params.confirmed === true }
     );
 
     if (!permissionCheck.success) {

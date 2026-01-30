@@ -60,7 +60,8 @@ export async function POST(request: NextRequest) {
         description: params.description,
         location: params.location,
         attendees: params.attendees,
-      }
+      },
+      { confirmed: params.confirmed === true }
     );
 
     if (!permissionCheck.success) {

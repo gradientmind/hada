@@ -117,7 +117,8 @@ export async function verifyGoogleIntegration(userId: string): Promise<
 export async function verifyPermission(
   userId: string,
   permission: PermissionKey,
-  actionDetails?: any
+  actionDetails?: any,
+  options?: { confirmed?: boolean }
 ): Promise<
   | { success: true }
   | {
@@ -127,6 +128,10 @@ export async function verifyPermission(
       confirmationData?: any;
     }
 > {
+  if (options?.confirmed) {
+    return { success: true };
+  }
+
   const mode = await checkPermission(userId, permission);
 
   if (mode === "direct") {

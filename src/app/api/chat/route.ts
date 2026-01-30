@@ -4,6 +4,29 @@ import { getOrCreateConversation, saveMessage } from '@/lib/db/conversations';
 import { detectFunctionCalls, executeFunction } from '@/lib/llm/function-calling';
 import { NextRequest, NextResponse } from 'next/server';
 
+const CONFIRM_REGEX = /^(yes|y|confirm|ok|okay|sure|go ahead|do it|please do)\b/i;
+const CANCEL_REGEX = /^(no|n|cancel|stop|don'?t|do not|never mind|nevermind)\b/i;
+
+function buildConfirmationPrompt(action: string, args: Record<string, any>) {
+  if (action === 'create_calendar_event') {
+    const summary = args.summary ? `"${args.summary}"` : 'this event';
+    const start = args.start || args.start_date;
+    const end = args.end || args.end_date;
+    const timeRange = start && end ? ` (${start} → ${end})` : '';
+    return `I can create the event ${summary}${timeRange}. Reply "confirm" to proceed or "cancel" to skip.`;
+  }
+
+  if (action === 'update_calendar_event') {
+    return `I can update that calendar event. Reply "confirm" to proceed or "cancel" to skip.`;
+  }
+
+  if (action === 'delete_calendar_event') {
+    return `I can delete that calendar event. Reply "confirm" to proceed or "cancel" to skip.`;
+  }
+
+  return `This action needs confirmation. Reply "confirm" to proceed or "cancel" to skip.`;
+}
+
 export async function POST(request: NextRequest) {
   try {
     // Authenticate user
@@ -39,6 +62,156 @@ export async function POST(request: NextRequest) {
       message
     );
 
+    // Check for pending confirmation on the last assistant message
+    const { data: lastAssistant } = await supabase
+      .from('messages')
+      .select('id, metadata')
+      .eq('conversation_id', conversation.id)
+      .eq('role', 'assistant')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    const pendingConfirmation = (lastAssistant?.metadata as any)?.confirmation;
+    if (pendingConfirmation?.pending) {
+      if (CONFIRM_REGEX.test(message.trim())) {
+        const confirmedCall = {
+          name: pendingConfirmation.function?.name,
+          arguments: {
+            ...(pendingConfirmation.function?.arguments || {}),
+            confirmed: true,
+          },
+        };
+
+        try {
+          const result = await executeFunction(confirmedCall, user.id);
+          const cards = result?.success && result.card ? [result.card] : [];
+
+          if (!result?.success) {
+            const errorMessage =
+              result?.error?.message || 'That action could not be completed.';
+            const assistantMessage = await saveMessage(
+              supabase,
+              conversation.id,
+              'assistant',
+              errorMessage
+            );
+
+            return NextResponse.json({
+              id: assistantMessage.id,
+              content: errorMessage,
+              role: 'assistant',
+              conversationId: conversation.id,
+              userMessageId: userMessage.id,
+            });
+          }
+
+          const successText =
+            pendingConfirmation.function?.name === 'create_calendar_event'
+              ? `I’ve created the event "${pendingConfirmation.function?.arguments?.summary}".`
+              : 'Done.';
+
+          const assistantMessage = await saveMessage(
+            supabase,
+            conversation.id,
+            'assistant',
+            successText,
+            cards.length > 0 ? { cards } : undefined
+          );
+
+          // Mark confirmation as resolved
+          const updatedMetadata = {
+            ...(lastAssistant?.metadata as Record<string, any>),
+            confirmation: {
+              ...pendingConfirmation,
+              pending: false,
+              resolved_at: new Date().toISOString(),
+            },
+          };
+          await supabase
+            .from('messages')
+            .update({ metadata: updatedMetadata })
+            .eq('id', lastAssistant?.id);
+
+          return NextResponse.json({
+            id: assistantMessage.id,
+            content: successText,
+            cards,
+            role: 'assistant',
+            conversationId: conversation.id,
+            userMessageId: userMessage.id,
+          });
+        } catch (error: any) {
+          console.error('Confirmation execution error:', error);
+          const assistantMessage = await saveMessage(
+            supabase,
+            conversation.id,
+            'assistant',
+            error.message || 'That action could not be completed.'
+          );
+
+          return NextResponse.json({
+            id: assistantMessage.id,
+            content: assistantMessage.content,
+            role: 'assistant',
+            conversationId: conversation.id,
+            userMessageId: userMessage.id,
+          });
+        }
+      }
+
+      if (CANCEL_REGEX.test(message.trim())) {
+        const cancelText = 'Okay, I won’t make that change.';
+        const assistantMessage = await saveMessage(
+          supabase,
+          conversation.id,
+          'assistant',
+          cancelText
+        );
+
+        const updatedMetadata = {
+          ...(lastAssistant?.metadata as Record<string, any>),
+          confirmation: {
+            ...pendingConfirmation,
+            pending: false,
+            resolved_at: new Date().toISOString(),
+            cancelled: true,
+          },
+        };
+        await supabase
+          .from('messages')
+          .update({ metadata: updatedMetadata })
+          .eq('id', lastAssistant?.id);
+
+        return NextResponse.json({
+          id: assistantMessage.id,
+          content: cancelText,
+          role: 'assistant',
+          conversationId: conversation.id,
+          userMessageId: userMessage.id,
+        });
+      }
+
+      const reminderText = buildConfirmationPrompt(
+        pendingConfirmation.function?.name,
+        pendingConfirmation.function?.arguments || {}
+      );
+      const assistantMessage = await saveMessage(
+        supabase,
+        conversation.id,
+        'assistant',
+        reminderText
+      );
+
+      return NextResponse.json({
+        id: assistantMessage.id,
+        content: reminderText,
+        role: 'assistant',
+        conversationId: conversation.id,
+        userMessageId: userMessage.id,
+      });
+    }
+
     // Try function calling first for calendar/email operations
     console.log('[Chat API] Starting function call detection for:', message);
     const functionCallResult = await detectFunctionCalls(message, user.id);
@@ -52,7 +225,57 @@ export async function POST(request: NextRequest) {
           functionCallResult.functions.map(fn => executeFunction(fn, user.id))
         );
 
-        // Extract card data from results
+        // Handle confirmation or errors
+        const failedResult = results.find((r) => r && r.success === false);
+        if (failedResult) {
+          if (failedResult.requiresConfirmation) {
+            const confirmationPayload = {
+              pending: true,
+              function: functionCallResult.functions[0],
+              confirmationData: failedResult.confirmationData || null,
+              created_at: new Date().toISOString(),
+            };
+            const promptText = buildConfirmationPrompt(
+              functionCallResult.functions[0].name,
+              functionCallResult.functions[0].arguments || {}
+            );
+
+            const assistantMessage = await saveMessage(
+              supabase,
+              conversation.id,
+              'assistant',
+              promptText,
+              { confirmation: confirmationPayload }
+            );
+
+            return NextResponse.json({
+              id: assistantMessage.id,
+              content: promptText,
+              role: 'assistant',
+              conversationId: conversation.id,
+              userMessageId: userMessage.id,
+            });
+          }
+
+          const errorText =
+            failedResult?.error?.message || 'That action could not be completed.';
+          const assistantMessage = await saveMessage(
+            supabase,
+            conversation.id,
+            'assistant',
+            errorText
+          );
+
+          return NextResponse.json({
+            id: assistantMessage.id,
+            content: errorText,
+            role: 'assistant',
+            conversationId: conversation.id,
+            userMessageId: userMessage.id,
+          });
+        }
+
+        // Extract card data from successful results
         const cards = results
           .filter(r => r.success && r.card)
           .map(r => r.card);
