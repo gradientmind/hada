@@ -60,7 +60,46 @@ npm install
    - Add authorized redirect URI: `https://<your-supabase-url>/auth/v1/callback`
 4. Enter your Google Client ID and Secret in Supabase
 
-### 3. Configure Environment
+### 3. Set Up Google Calendar & Gmail Integration (Phase 3)
+
+To enable Google Calendar and Gmail features, you need separate OAuth credentials:
+
+#### Create Google Cloud Project
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com)
+2. Create a new project or select existing one
+3. Enable required APIs:
+   - Go to **APIs & Services** → **Library**
+   - Search and enable **Google Calendar API**
+   - Search and enable **Gmail API**
+
+#### Create OAuth 2.0 Credentials
+
+1. Go to **APIs & Services** → **Credentials**
+2. Click **Create Credentials** → **OAuth 2.0 Client ID**
+3. Configure OAuth consent screen (if not done):
+   - User Type: **External**
+   - App name: **Hada**
+   - User support email: your email
+   - Scopes: Add `calendar` and `gmail.modify`
+   - Test users: Add your email for testing
+4. Create OAuth Client ID:
+   - Application type: **Web application**
+   - Name: **Hada Web App**
+   - Authorized redirect URIs:
+     - Development: `http://localhost:3000/api/auth/google/callback`
+     - Production: `https://your-domain.com/api/auth/google/callback`
+5. Copy **Client ID** and **Client Secret**
+
+#### Run Additional Migration
+
+Run the Phase 3 migration in Supabase SQL Editor:
+
+```sql
+-- Copy contents of supabase/migrations/002_add_user_permissions.sql
+```
+
+### 4. Configure Environment
 
 ```bash
 cp .env.local.example .env.local
@@ -69,8 +108,16 @@ cp .env.local.example .env.local
 Edit `.env.local`:
 
 ```bash
+# App Configuration
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+# Supabase
 NEXT_PUBLIC_SUPABASE_URL=https://xxxxx.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+# Google OAuth (Phase 3 - for Calendar & Gmail integration)
+GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your-google-client-secret
 ```
 
 ### 4. Start Development Server

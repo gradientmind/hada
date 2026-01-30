@@ -1,4 +1,12 @@
 export type UserTier = "free" | "paid" | "pro";
+export type PermissionMode = "direct" | "confirm";
+
+export interface UserPermissions {
+  google_calendar_read?: PermissionMode;
+  google_calendar_write?: PermissionMode;
+  google_gmail_read?: PermissionMode;
+  google_gmail_send?: PermissionMode;
+}
 
 export interface User {
   id: string;
@@ -6,6 +14,7 @@ export interface User {
   name: string | null;
   avatar_url: string | null;
   tier: UserTier;
+  permissions: UserPermissions;
   created_at: string;
   updated_at: string;
 }

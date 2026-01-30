@@ -2,8 +2,16 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
-const integrations = [
+interface GoogleIntegrationStatus {
+  connected: boolean;
+  connectedAt?: string;
+  lastSync?: string;
+}
+
+const staticIntegrations = [
   {
     id: "telegram",
     name: "Telegram",
@@ -19,13 +27,6 @@ const integrations = [
     comingSoon: true,
   },
   {
-    id: "google",
-    name: "Google",
-    description: "Connect Google Calendar and Gmail for scheduling and email.",
-    icon: GoogleIcon,
-    comingSoon: true,
-  },
-  {
     id: "microsoft",
     name: "Microsoft",
     description: "Connect Outlook Calendar and Mail for Microsoft 365.",
@@ -35,6 +36,92 @@ const integrations = [
 ];
 
 export function IntegrationsTab() {
+  const [googleStatus, setGoogleStatus] = useState<GoogleIntegrationStatus>({ connected: false });
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const searchParams = useSearchParams();
+
+  // Fetch Google integration status
+  useEffect(() => {
+    fetchGoogleStatus();
+  }, []);
+
+  // Handle OAuth callback messages
+  useEffect(() => {
+    const success = searchParams.get("success");
+    const error = searchParams.get("error");
+
+    if (success === "google_connected") {
+      setMessage({ type: "success", text: "Google account connected successfully!" });
+      fetchGoogleStatus();
+      // Clear URL params
+      window.history.replaceState({}, "", "/settings");
+    } else if (error) {
+      const errorMessages: Record<string, string> = {
+        google_oauth_denied: "You denied access to your Google account.",
+        invalid_oauth_response: "Invalid OAuth response from Google.",
+        invalid_state: "Invalid state parameter. Please try again.",
+        not_authenticated: "You must be logged in to connect integrations.",
+        token_exchange_failed: "Failed to exchange authorization code.",
+        no_refresh_token: "Failed to get refresh token from Google.",
+        database_error: "Failed to save integration. Please try again.",
+        unknown_error: "An unknown error occurred. Please try again.",
+      };
+      setMessage({
+        type: "error",
+        text: errorMessages[error] || "Failed to connect Google account.",
+      });
+      // Clear URL params
+      window.history.replaceState({}, "", "/settings");
+    }
+
+    // Clear message after 5 seconds
+    if (success || error) {
+      setTimeout(() => setMessage(null), 5000);
+    }
+  }, [searchParams]);
+
+  async function fetchGoogleStatus() {
+    try {
+      const response = await fetch("/api/integrations/google");
+      if (response.ok) {
+        const data = await response.json();
+        setGoogleStatus(data);
+      }
+    } catch (error) {
+      console.error("Error fetching Google status:", error);
+    }
+  }
+
+  async function handleGoogleConnect() {
+    window.location.href = "/api/auth/google/authorize";
+  }
+
+  async function handleGoogleDisconnect() {
+    if (!confirm("Are you sure you want to disconnect your Google account?")) {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await fetch("/api/integrations/google", {
+        method: "DELETE",
+      });
+
+      if (response.ok) {
+        setGoogleStatus({ connected: false });
+        setMessage({ type: "success", text: "Google account disconnected successfully." });
+      } else {
+        setMessage({ type: "error", text: "Failed to disconnect Google account." });
+      }
+    } catch (error) {
+      console.error("Error disconnecting Google:", error);
+      setMessage({ type: "error", text: "Failed to disconnect Google account." });
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -44,8 +131,61 @@ export function IntegrationsTab() {
         </p>
       </div>
 
+      {message && (
+        <div
+          className={`rounded-lg border p-4 ${
+            message.type === "success"
+              ? "border-green-200 bg-green-50 text-green-800 dark:border-green-800 dark:bg-green-950 dark:text-green-200"
+              : "border-red-200 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200"
+          }`}
+        >
+          {message.text}
+        </div>
+      )}
+
       <div className="grid gap-4">
-        {integrations.map((integration) => (
+        {/* Google Integration (functional) */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-zinc-100 dark:bg-zinc-800">
+                  <GoogleIcon className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <CardTitle className="text-base">Google</CardTitle>
+                    {googleStatus.connected && (
+                      <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
+                        <CheckIcon className="h-3 w-3" />
+                        Connected
+                      </span>
+                    )}
+                  </div>
+                  <CardDescription className="text-sm">
+                    Connect Google Calendar and Gmail for scheduling and email.
+                  </CardDescription>
+                  {googleStatus.connected && googleStatus.lastSync && (
+                    <p className="text-xs text-zinc-400 mt-1">
+                      Last synced: {new Date(googleStatus.lastSync).toLocaleString()}
+                    </p>
+                  )}
+                </div>
+              </div>
+              <Button
+                variant={googleStatus.connected ? "outline" : "default"}
+                size="sm"
+                onClick={googleStatus.connected ? handleGoogleDisconnect : handleGoogleConnect}
+                disabled={loading}
+              >
+                {loading ? "..." : googleStatus.connected ? "Disconnect" : "Connect"}
+              </Button>
+            </div>
+          </CardHeader>
+        </Card>
+
+        {/* Other integrations (coming soon) */}
+        {staticIntegrations.map((integration) => (
           <Card key={integration.id}>
             <CardHeader>
               <div className="flex items-center justify-between">
@@ -60,8 +200,8 @@ export function IntegrationsTab() {
                     </CardDescription>
                   </div>
                 </div>
-                <Button variant="outline" size="sm" disabled={integration.comingSoon}>
-                  {integration.comingSoon ? "Coming Soon" : "Connect"}
+                <Button variant="outline" size="sm" disabled>
+                  Coming Soon
                 </Button>
               </div>
             </CardHeader>
@@ -69,6 +209,23 @@ export function IntegrationsTab() {
         ))}
       </div>
     </div>
+  );
+}
+
+function CheckIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 20 20"
+      fill="currentColor"
+      className={className}
+    >
+      <path
+        fillRule="evenodd"
+        d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z"
+        clipRule="evenodd"
+      />
+    </svg>
   );
 }
 
