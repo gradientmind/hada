@@ -1,4 +1,5 @@
 import { checkHealth } from '@/lib/moltbot/client';
+import { GATEWAY_URL } from '@/lib/moltbot/config';
 import { NextResponse } from 'next/server';
 
 export interface HealthStatus {
@@ -37,7 +38,7 @@ export async function GET(): Promise<NextResponse<HealthStatus>> {
     status,
     gateway: {
       connected: gatewayConnected,
-      url: process.env.MOLTBOT_GATEWAY_URL || 'ws://localhost:18789',
+      url: GATEWAY_URL,
       lastCheck: new Date().toISOString(),
     },
     llmFallback: {
