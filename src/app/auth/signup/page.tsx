@@ -30,6 +30,7 @@ export default function SignUpPage() {
         data: {
           name,
         },
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
       },
     });
 
