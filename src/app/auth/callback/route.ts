@@ -32,9 +32,21 @@ export async function GET(request: Request) {
   }
 
   if (tokenHash && type) {
+    const emailOtpTypes = new Set([
+      "signup",
+      "invite",
+      "magiclink",
+      "recovery",
+      "email_change",
+    ]);
+    if (!emailOtpTypes.has(type)) {
+      return NextResponse.redirect(
+        `${origin}/auth/error?error=unsupported_otp_type&error_code=otp_type&error_description=Unsupported+OTP+type`
+      );
+    }
     const supabase = await createClient();
     const { error } = await supabase.auth.verifyOtp({
-      type: type as Parameters<typeof supabase.auth.verifyOtp>[0]["type"],
+      type: type as "signup" | "invite" | "magiclink" | "recovery" | "email_change",
       token_hash: tokenHash,
     });
     if (!error) {
