@@ -36,10 +36,13 @@ export function createWebSearchTool(): AgentTool {
       }
 
       const provider = (process.env.SEARCH_PROVIDER || "tavily").toLowerCase();
-      const apiKey = process.env.SEARCH_API_KEY;
+      const apiKey = resolveSearchApiKey(provider);
 
       if (!apiKey) {
-        return JSON.stringify({ success: false, error: "SEARCH_API_KEY is not configured" });
+        return JSON.stringify({
+          success: false,
+          error: `Search API key not configured for provider "${provider}". Set SEARCH_API_KEY or provider-specific keys.`,
+        });
       }
 
       try {
@@ -61,6 +64,26 @@ export function createWebSearchTool(): AgentTool {
       }
     },
   };
+}
+
+function resolveSearchApiKey(provider: string): string {
+  const shared = (process.env.SEARCH_API_KEY || "").trim();
+  if (shared) {
+    return shared;
+  }
+
+  if (provider === "brave") {
+    return (
+      (process.env.BRAVE_SEARCH_API_KEY || "").trim() ||
+      (process.env.BRAVE_API_KEY || "").trim()
+    );
+  }
+
+  if (provider === "serpapi") {
+    return (process.env.SERPAPI_API_KEY || "").trim();
+  }
+
+  return (process.env.TAVILY_API_KEY || "").trim();
 }
 
 async function searchTavily(

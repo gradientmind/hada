@@ -131,6 +131,11 @@ MINIMAX_API_KEY=your-minimax-api-key
 # Web Search (optional)
 # SEARCH_PROVIDER=tavily
 # SEARCH_API_KEY=
+# Optional provider-specific keys (if SEARCH_API_KEY is not set)
+# BRAVE_API_KEY=
+# BRAVE_SEARCH_API_KEY=
+# SERPAPI_API_KEY=
+# TAVILY_API_KEY=
 ```
 
 ### 6. Start Development Server

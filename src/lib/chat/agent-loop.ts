@@ -133,6 +133,21 @@ function parseProtocolToolCalls(
   }
 
   const calls: Array<{ id: string; name: string; arguments: Record<string, unknown> }> = [];
+  const seen = new Set<string>();
+
+  const pushCall = (name: string, args: Record<string, unknown>) => {
+    const key = `${name}:${JSON.stringify(args)}`;
+    if (seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    calls.push({
+      id: `toolcall_${crypto.randomUUID()}`,
+      name,
+      arguments: args,
+    });
+  };
+
   const blockRegex = /\[TOOL_CALL\]([\s\S]*?)\[\/TOOL_CALL\]/gi;
   let blockMatch: RegExpExecArray | null;
 
@@ -147,14 +162,81 @@ function parseProtocolToolCalls(
     }
 
     const args = extractProtocolArgs(block);
-    calls.push({
-      id: `toolcall_${crypto.randomUUID()}`,
-      name,
-      arguments: args,
-    });
+    pushCall(name, args);
+  }
+
+  const xmlBlockRegex = /<tool_calls>([\s\S]*?)<\/tool_calls>/gi;
+  let xmlMatch: RegExpExecArray | null;
+  while ((xmlMatch = xmlBlockRegex.exec(content)) !== null) {
+    const block = xmlMatch[1] || "";
+    for (const rawJson of extractJsonObjects(block)) {
+      try {
+        const parsed = safeJsonParse(rawJson);
+        const name = typeof parsed?.name === "string" ? parsed.name : "";
+        if (!name) {
+          continue;
+        }
+        const argumentsValue =
+          typeof parsed.arguments === "string"
+            ? safeJsonParse(parsed.arguments)
+            : parsed.arguments;
+        pushCall(name, toObject(argumentsValue));
+      } catch {
+        // Ignore malformed tool-call snippets.
+      }
+    }
   }
 
   return calls;
+}
+
+function extractJsonObjects(text: string): string[] {
+  const results: string[] = [];
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  let start = -1;
+
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i];
+
+    if (inString) {
+      if (escape) {
+        escape = false;
+      } else if (ch === "\\") {
+        escape = true;
+      } else if (ch === "\"") {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (ch === "\"") {
+      inString = true;
+      continue;
+    }
+
+    if (ch === "{") {
+      if (depth === 0) {
+        start = i;
+      }
+      depth += 1;
+      continue;
+    }
+
+    if (ch === "}") {
+      if (depth === 0) {
+        continue;
+      }
+      depth -= 1;
+      if (depth === 0 && start !== -1) {
+        results.push(text.slice(start, i + 1));
+        start = -1;
+      }
+    }
+  }
+
+  return results;
 }
 
 function extractProtocolArgs(block: string): Record<string, unknown> {
@@ -246,6 +328,8 @@ function sanitizeAssistantContent(text: string): string {
   output = output.replace(/\[TOOL_RESULT\][\s\S]*?\[\/TOOL_RESULT\]/gi, "");
   output = output.replace(/\[TOOL_CALL\][\s\S]*$/gi, "");
   output = output.replace(/\[TOOL_RESULT\][\s\S]*$/gi, "");
+  output = output.replace(/<tool_calls>[\s\S]*?<\/tool_calls>/gi, "");
+  output = output.replace(/<tool_calls>[\s\S]*$/gi, "");
 
   // Clean up common parameter markers leaked by some providers.
   output = output.replace(/<!--\$[^>]+-->/g, "");
@@ -254,6 +338,22 @@ function sanitizeAssistantContent(text: string): string {
   output = output.replace(/\n{3,}/g, "\n\n");
 
   return output.trim();
+}
+
+function safeJsonParse(value: string): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(value);
+    return toObject(parsed);
+  } catch {
+    return {};
+  }
+}
+
+function toObject(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+  return value as Record<string, unknown>;
 }
 
 function normalizeMarkdownTables(text: string): string {
