@@ -33,6 +33,8 @@ export async function POST(request: NextRequest) {
       role: "assistant",
       conversationId: result.conversationId,
       userMessageId: result.userMessageId,
+      isError: !!result.metadata.gatewayError,
+      errorMessage: result.metadata.gatewayError?.message,
     });
   } catch (error) {
     console.error("Chat API error:", error);

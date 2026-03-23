@@ -29,6 +29,7 @@ interface Message {
       arguments: Record<string, unknown>;
     };
   };
+  isError?: boolean;
   created_at: string;
 }
 
@@ -364,6 +365,7 @@ export default function ChatPage() {
                 : undefined,
             }
           : undefined,
+        isError: !!data.isError,
         created_at: new Date().toISOString(),
       };
       setMessages((prev) => [...prev, assistantMessage]);
@@ -591,7 +593,9 @@ export default function ChatPage() {
                           </AvatarFallback>
                         </Avatar>
                         <div className="flex-1 pt-1 space-y-3">
-                          <MessageContent content={message.content} />
+                          <div className={message.isError ? "text-red-500 dark:text-red-400" : undefined}>
+                            <MessageContent content={message.content} />
+                          </div>
                           {/* Render calendar cards */}
                           {message.cards?.map((card, idx) => {
                             if (card.type === "calendar_event" && isCalendarEventData(card.data)) {
