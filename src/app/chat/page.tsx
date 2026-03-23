@@ -41,6 +41,7 @@ interface ApiMessage {
   metadata: {
     thinking?: string;
     cards?: ChatCard[];
+    gatewayError?: { code: string; message: string };
     confirmation?: {
       pending?: boolean;
       function?: {
@@ -216,6 +217,7 @@ export default function ChatPage() {
             : undefined,
         }
       : undefined,
+    isError: !!msg.metadata?.gatewayError,
     created_at: msg.created_at,
   });
 
