@@ -354,7 +354,21 @@ async function callLLMWithRetry(
       const delayMs = isRateLimitError(error)
         ? Math.pow(2, attempt + 1) * 1_000 // 2s, 4s
         : 1_000;
-      await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(resolve, delayMs);
+        const signal = options.signal;
+        if (signal) {
+          const onAbort = () => {
+            clearTimeout(timer);
+            reject(new DOMException("Aborted", "AbortError"));
+          };
+          if (signal.aborted) {
+            onAbort();
+          } else {
+            signal.addEventListener("abort", onAbort, { once: true });
+          }
+        }
+      });
     }
   }
   throw lastError;
