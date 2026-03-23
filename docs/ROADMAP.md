@@ -49,12 +49,14 @@ Hada is "Bot as a Service" (BaaS): each user gets an assistant that can reason, 
 
 ## Active Priorities
 
-### Phase 6: Reliability & UX Polish (In Progress)
+### Phase 6: Reliability & UX Polish ✅
 - Improve response formatting normalization across providers
 - Tighten tool-call protocol sanitization and fallback parsing
 - Harden error surfacing and recovery in agent loop
-- Add richer UI rendering for structured outputs
-- Improve onboarding and integration setup guidance
+- Add richer UI rendering for structured outputs (react-markdown + remark-gfm)
+- SSE streaming for real-time response rendering
+- Transient LLM error retry with exponential backoff
+- Improve onboarding and integration setup guidance (pending)
 
 ### Phase 7: Google/Microsoft Integrations (In Progress)
 - Expand calendar capabilities (availability and richer edits)
