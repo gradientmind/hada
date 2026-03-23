@@ -10,7 +10,10 @@ export interface AgentTool {
   name: string;
   description: string;
   parameters: Record<string, unknown>;
-  execute: (args: Record<string, unknown>) => Promise<string>;
+  execute: (
+    args: Record<string, unknown>,
+    options?: { signal?: AbortSignal },
+  ) => Promise<string>;
 }
 
 export interface AgentLoopOptions {
@@ -30,6 +33,10 @@ export async function* agentLoop(options: AgentLoopOptions): AsyncGenerator<Agen
   const startedAt = Date.now();
   const timeoutMs = options.timeout ?? DEFAULT_TIMEOUT_MS;
   const maxErrors = options.maxErrors ?? DEFAULT_MAX_ERRORS;
+  const timeoutController = new AbortController();
+  const timeoutHandle = setTimeout(() => {
+    timeoutController.abort();
+  }, timeoutMs);
   const toolMap = new Map(options.tools.map((tool) => [tool.name, tool]));
   const llmMessages: LLMMessage[] = [
     { role: "system", content: options.systemPrompt },
@@ -44,84 +51,95 @@ export async function* agentLoop(options: AgentLoopOptions): AsyncGenerator<Agen
   let consecutiveErrors = 0;
   let finalText = "";
 
-  while (true) {
-    if (Date.now() - startedAt > timeoutMs) {
-      yield { type: "error", message: "Agent timed out before finishing the response." };
-      return;
-    }
+  try {
+    while (true) {
+      if (timeoutController.signal.aborted || Date.now() - startedAt > timeoutMs) {
+        yield { type: "error", message: "Agent timed out before finishing the response." };
+        return;
+      }
 
-    try {
-      const result = await callLLM({
-        selection: options.provider,
-        messages: llmMessages,
-        tools: llmTools,
-      });
+      try {
+        const result = await callLLMWithRetry({
+          selection: options.provider,
+          messages: llmMessages,
+          tools: llmTools,
+          signal: timeoutController.signal,
+        });
 
-      const rawContent = result.content || "";
-      const visibleContent = sanitizeAssistantContent(rawContent);
-      const fallbackToolCalls =
-        result.toolCalls.length === 0 ? parseProtocolToolCalls(rawContent) : [];
-      const effectiveToolCalls =
-        result.toolCalls.length > 0 ? result.toolCalls : fallbackToolCalls;
+        const rawContent = result.content || "";
+        const visibleContent = sanitizeAssistantContent(rawContent);
+        const fallbackToolCalls =
+          result.toolCalls.length === 0 ? parseProtocolToolCalls(rawContent) : [];
+        const effectiveToolCalls =
+          result.toolCalls.length > 0 ? result.toolCalls : fallbackToolCalls;
 
-      if (visibleContent) {
-        finalText += visibleContent;
-        for (const chunk of chunkText(visibleContent, 140)) {
-          yield { type: "text_delta", content: chunk };
+        if (!effectiveToolCalls.length) {
+          if (visibleContent) {
+            finalText += visibleContent;
+            for (const chunk of chunkText(visibleContent, 140)) {
+              yield { type: "text_delta", content: chunk };
+            }
+          }
+
+          yield { type: "done", content: finalText.trim() };
+          return;
+        }
+
+        llmMessages.push({
+          role: "assistant",
+          content: visibleContent,
+          tool_calls: effectiveToolCalls.map((call) => ({
+            id: call.id,
+            type: "function",
+            function: {
+              name: call.name,
+              arguments: JSON.stringify(call.arguments),
+            },
+          })),
+        });
+
+        for (const call of effectiveToolCalls) {
+          yield { type: "tool_call", name: call.name, args: call.arguments };
+
+          const tool = toolMap.get(call.name);
+          const toolResult = await runTool(tool, call.arguments, timeoutController.signal);
+          const sanitized = sanitizeToolResult(toolResult);
+
+          yield { type: "tool_result", name: call.name, result: sanitized };
+          llmMessages.push({
+            role: "tool",
+            name: call.name,
+            tool_call_id: call.id,
+            content: sanitized,
+          });
+        }
+
+        consecutiveErrors = 0;
+      } catch (error) {
+        if (timeoutController.signal.aborted || isAbortError(error)) {
+          yield { type: "error", message: "Agent timed out before finishing the response." };
+          return;
+        }
+
+        consecutiveErrors += 1;
+        const message =
+          error instanceof Error ? error.message : "Unknown error while running agent loop.";
+
+        llmMessages.push({
+          role: "system",
+          content:
+            `The previous attempt failed with a runtime error: ${message}. ` +
+            "Continue from the existing conversation state. If a tool is still needed, call it again explicitly.",
+        });
+
+        if (consecutiveErrors >= maxErrors) {
+          yield { type: "error", message: `Agent stopped after ${consecutiveErrors} errors: ${message}` };
+          return;
         }
       }
-
-      if (!effectiveToolCalls.length) {
-        yield { type: "done", content: finalText.trim() };
-        return;
-      }
-
-      llmMessages.push({
-        role: "assistant",
-        content: visibleContent,
-        tool_calls: effectiveToolCalls.map((call) => ({
-          id: call.id,
-          type: "function",
-          function: {
-            name: call.name,
-            arguments: JSON.stringify(call.arguments),
-          },
-        })),
-      });
-
-      for (const call of effectiveToolCalls) {
-        yield { type: "tool_call", name: call.name, args: call.arguments };
-
-        const tool = toolMap.get(call.name);
-        const toolResult = await runTool(tool, call.arguments);
-        const sanitized = sanitizeToolResult(toolResult);
-
-        yield { type: "tool_result", name: call.name, result: sanitized };
-        llmMessages.push({
-          role: "tool",
-          name: call.name,
-          tool_call_id: call.id,
-          content: sanitized,
-        });
-      }
-
-      consecutiveErrors = 0;
-    } catch (error) {
-      consecutiveErrors += 1;
-      const message =
-        error instanceof Error ? error.message : "Unknown error while running agent loop.";
-
-      llmMessages.push({
-        role: "tool",
-        name: "runtime_error",
-        content: `Runtime error: ${message}`,
-      });
-
-      if (consecutiveErrors >= maxErrors) {
-        yield { type: "error", message: `Agent stopped after ${consecutiveErrors} errors: ${message}` };
-        return;
-      }
     }
+  } finally {
+    clearTimeout(timeoutHandle);
   }
 }
 
@@ -280,14 +298,18 @@ function extractProtocolArgs(block: string): Record<string, unknown> {
 async function runTool(
   tool: AgentTool | undefined,
   args: Record<string, unknown>,
+  signal?: AbortSignal,
 ): Promise<string> {
   if (!tool) {
     return "Tool not found.";
   }
 
   try {
-    return await tool.execute(args);
+    return await tool.execute(args, { signal });
   } catch (error) {
+    if (isAbortError(error)) {
+      throw error;
+    }
     return error instanceof Error ? `Tool error: ${error.message}` : "Tool error.";
   }
 }
@@ -298,6 +320,44 @@ function sanitizeToolResult(result: string): string {
     return trimmed;
   }
   return `${trimmed.slice(0, TOOL_RESULT_LIMIT)}\n\n[tool result truncated]`;
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException
+    ? error.name === "AbortError"
+    : error instanceof Error && error.name === "AbortError";
+}
+
+function isRateLimitError(error: unknown): boolean {
+  return error instanceof Error && /\(429\)/.test(error.message);
+}
+
+function isTransientError(error: unknown): boolean {
+  if (isRateLimitError(error)) return true;
+  if (!(error instanceof Error)) return false;
+  const msg = error.message.toLowerCase();
+  return msg.includes("econnreset") || msg.includes("etimedout") || msg.includes("fetch failed");
+}
+
+async function callLLMWithRetry(
+  options: Parameters<typeof callLLM>[0],
+  maxRetries = 2,
+): Promise<Awaited<ReturnType<typeof callLLM>>> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await callLLM(options);
+    } catch (error) {
+      if (isAbortError(error)) throw error;
+      lastError = error;
+      if (!isTransientError(error) || attempt >= maxRetries) throw error;
+      const delayMs = isRateLimitError(error)
+        ? Math.pow(2, attempt + 1) * 1_000 // 2s, 4s
+        : 1_000;
+      await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+  throw lastError;
 }
 
 function chunkText(text: string, maxChunkSize: number): string[] {
