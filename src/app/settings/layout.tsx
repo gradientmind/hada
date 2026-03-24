@@ -25,7 +25,7 @@ export default function SettingsLayout({
       <header className="flex items-center justify-between bg-white/70 backdrop-blur-md border-b border-zinc-200/80 px-4 py-3 dark:bg-zinc-900/60 dark:border-zinc-800/60">
         <div className="flex items-center gap-3">
           <Link href="/chat" className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg gradient-brand shadow-md shadow-violet-500/20">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg gradient-brand shadow-md shadow-teal-500/20">
               <span className="text-sm font-bold text-white">H</span>
             </div>
             <span className="font-semibold">Hada</span>

@@ -493,7 +493,7 @@ export default function ChatPage() {
           type="submit"
           disabled={isLoading || !input.trim()}
           size="sm"
-          className="absolute bottom-2 right-2 rounded-xl gradient-brand text-white border-0 shadow-md shadow-violet-500/20 disabled:opacity-40"
+          className="absolute bottom-2 right-2 rounded-xl gradient-brand text-white border-0 shadow-md shadow-teal-500/20 disabled:opacity-40"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -517,7 +517,7 @@ export default function ChatPage() {
 
       <header className="flex items-center justify-between bg-white/70 backdrop-blur-md border-b border-zinc-200/80 px-4 py-3 dark:bg-zinc-900/60 dark:border-zinc-800/60">
         <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg gradient-brand shadow-md shadow-violet-500/20">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg gradient-brand shadow-md shadow-teal-500/20">
             <span className="text-sm font-bold text-white">H</span>
           </div>
           <span className="font-semibold">Hada</span>
@@ -595,8 +595,8 @@ export default function ChatPage() {
                     className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4"
                   >
                     <div className="relative mb-6">
-                      <div className="absolute inset-0 -m-3 rounded-3xl bg-gradient-to-br from-violet-500/20 via-indigo-500/15 to-purple-500/20 blur-xl" style={{ animation: "glow-pulse 3s ease-in-out infinite" }} />
-                      <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl gradient-brand shadow-lg shadow-violet-500/25">
+                      <div className="absolute inset-0 -m-3 rounded-3xl bg-gradient-to-br from-teal-500/20 via-cyan-500/15 to-teal-400/20 blur-xl" style={{ animation: "glow-pulse 3s ease-in-out infinite" }} />
+                      <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl gradient-brand shadow-lg shadow-teal-500/25">
                         <span className="text-2xl font-bold text-white">H</span>
                       </div>
                     </div>
@@ -618,7 +618,7 @@ export default function ChatPage() {
                             setInput(suggestion);
                             requestAnimationFrame(() => textareaRef.current?.focus());
                           }}
-                          className="glass rounded-xl p-4 text-left text-sm transition-all duration-200 hover:scale-[1.02] hover:shadow-lg hover:shadow-violet-500/5"
+                          className="glass rounded-xl p-4 text-left text-sm transition-all duration-200 hover:scale-[1.02] hover:shadow-lg hover:shadow-teal-500/5"
                         >
                           {suggestion}
                         </button>

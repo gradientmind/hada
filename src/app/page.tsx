@@ -19,14 +19,14 @@ export default function Home() {
     <div className="relative flex min-h-screen flex-col bg-gradient-to-b from-zinc-50 to-white dark:from-zinc-950 dark:to-black overflow-hidden">
       {/* Background glow accents */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -top-40 left-1/2 h-[600px] w-[600px] -translate-x-1/2 rounded-full bg-gradient-to-br from-violet-500/10 via-indigo-500/8 to-transparent blur-3xl" />
-        <div className="absolute bottom-0 right-0 h-[400px] w-[400px] rounded-full bg-gradient-to-tl from-indigo-500/8 via-purple-500/5 to-transparent blur-3xl" />
+        <div className="absolute -top-40 left-1/2 h-[600px] w-[600px] -translate-x-1/2 rounded-full bg-gradient-to-br from-teal-500/10 via-cyan-500/8 to-transparent blur-3xl" />
+        <div className="absolute bottom-0 right-0 h-[400px] w-[400px] rounded-full bg-gradient-to-tl from-cyan-500/8 via-teal-400/5 to-transparent blur-3xl" />
       </div>
 
       {/* Header */}
       <header className="relative flex items-center justify-between px-6 py-4 lg:px-8 border-b border-border/50 bg-background/70 backdrop-blur-md">
         <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg gradient-brand shadow-lg shadow-violet-500/20">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg gradient-brand shadow-lg shadow-teal-500/20">
             <span className="text-sm font-bold text-white">H</span>
           </div>
           <span className="text-xl font-semibold">Hada</span>
@@ -37,7 +37,7 @@ export default function Home() {
             <Button variant="ghost">Log in</Button>
           </Link>
           <Link href="/auth/signup">
-            <Button className="gradient-brand text-white border-0 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 transition-all duration-300">
+            <Button className="gradient-brand text-white border-0 shadow-lg shadow-teal-500/25 hover:shadow-teal-500/40 transition-all duration-300">
               Get Started
             </Button>
           </Link>
@@ -65,7 +65,7 @@ export default function Home() {
             <Link href="/auth/signup">
               <Button
                 size="lg"
-                className="h-12 px-8 text-base gradient-brand text-white border-0 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-[1.02] transition-all duration-300"
+                className="h-12 px-8 text-base gradient-brand text-white border-0 shadow-lg shadow-teal-500/25 hover:shadow-teal-500/40 hover:scale-[1.02] transition-all duration-300"
               >
                 Start for free
               </Button>
@@ -90,7 +90,7 @@ export default function Home() {
           className="relative mt-16 w-full max-w-2xl"
         >
           {/* Glow behind preview */}
-          <div className="absolute inset-0 -m-4 rounded-3xl bg-gradient-to-br from-violet-500/15 via-indigo-500/10 to-purple-500/15 blur-2xl" style={{ animation: "glow-pulse 4s ease-in-out infinite" }} />
+          <div className="absolute inset-0 -m-4 rounded-3xl bg-gradient-to-br from-teal-500/15 via-cyan-500/10 to-teal-400/15 blur-2xl" style={{ animation: "glow-pulse 4s ease-in-out infinite" }} />
           <div className="glass relative rounded-2xl p-6" style={{ animation: "float 6s ease-in-out infinite" }}>
             <div className="space-y-4">
               <div className="flex gap-3">
@@ -102,7 +102,7 @@ export default function Home() {
                 </div>
               </div>
               <div className="flex gap-3">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full gradient-brand text-white shadow-md shadow-violet-500/20">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full gradient-brand text-white shadow-md shadow-teal-500/20">
                   <span className="text-sm font-bold">H</span>
                 </div>
                 <div className="flex-1 space-y-3 text-left">
@@ -115,7 +115,7 @@ export default function Home() {
                         <p className="font-medium">The Cutting Room</p>
                         <p className="text-sm text-muted-foreground">2:00 PM, 4:00 PM available</p>
                       </div>
-                      <Button size="sm" className="gradient-brand text-white border-0 shadow-sm shadow-violet-500/20 text-xs">Book 2pm</Button>
+                      <Button size="sm" className="gradient-brand text-white border-0 shadow-sm shadow-teal-500/20 text-xs">Book 2pm</Button>
                     </div>
                   </div>
                 </div>
@@ -155,7 +155,7 @@ export default function Home() {
                 whileInView="visible"
                 viewport={{ once: true, margin: "-50px" }}
                 variants={featureCardVariants}
-                className="group glass rounded-xl p-6 transition-all duration-300 hover:scale-[1.02] hover:shadow-xl hover:shadow-violet-500/5 cursor-default"
+                className="group glass rounded-xl p-6 transition-all duration-300 hover:scale-[1.02] hover:shadow-xl hover:shadow-teal-500/5 cursor-default"
               >
                 <span className="text-2xl mb-3 block">{feature.icon}</span>
                 <h3 className="font-semibold">{feature.title}</h3>

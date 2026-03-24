@@ -61,12 +61,12 @@
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.269 0 0);
   --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.6 0.15 240);
+  --accent: oklch(0.6 0.14 175);
   --accent-foreground: oklch(1 0 0);
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(1 0 0 / 15%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.6 0.15 240);
+  --ring: oklch(0.6 0.14 175);
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);
@@ -74,12 +74,12 @@
   --chart-5: oklch(0.645 0.246 16.439);
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.6 0.15 240);
+  --sidebar-primary: oklch(0.6 0.14 175);
   --sidebar-primary-foreground: oklch(0.985 0 0);
   --sidebar-accent: oklch(0.269 0 0);
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 15%);
-  --sidebar-ring: oklch(0.6 0.15 240);
+  --sidebar-ring: oklch(0.6 0.14 175);
 }
 
 /* ── Light theme ─────────────────────────────────────────── */
@@ -96,12 +96,12 @@ html[data-theme="light"] {
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
   --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.55 0.14 240);
+  --accent: oklch(0.55 0.13 175);
   --accent-foreground: oklch(1 0 0);
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
-  --ring: oklch(0.55 0.14 240);
+  --ring: oklch(0.55 0.13 175);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
@@ -164,9 +164,9 @@ html[data-theme="light"] .glass {
 .gradient-text {
   background: linear-gradient(
     135deg,
-    oklch(0.7 0.18 270) 0%,
-    oklch(0.65 0.2 300) 50%,
-    oklch(0.6 0.15 240) 100%
+    oklch(0.72 0.15 175) 0%,
+    oklch(0.68 0.14 190) 50%,
+    oklch(0.65 0.12 165) 100%
   );
   -webkit-background-clip: text;
   background-clip: text;
@@ -175,9 +175,9 @@ html[data-theme="light"] .glass {
 html[data-theme="light"] .gradient-text {
   background: linear-gradient(
     135deg,
-    oklch(0.5 0.2 270) 0%,
-    oklch(0.45 0.22 300) 50%,
-    oklch(0.4 0.18 240) 100%
+    oklch(0.5 0.14 175) 0%,
+    oklch(0.45 0.15 190) 50%,
+    oklch(0.42 0.13 165) 100%
   );
   -webkit-background-clip: text;
   background-clip: text;
@@ -188,15 +188,15 @@ html[data-theme="light"] .gradient-text {
 .gradient-brand {
   background: linear-gradient(
     135deg,
-    oklch(0.55 0.2 270) 0%,
-    oklch(0.5 0.22 300) 100%
+    oklch(0.58 0.14 175) 0%,
+    oklch(0.52 0.13 190) 100%
   );
 }
 .gradient-brand:hover {
   background: linear-gradient(
     135deg,
-    oklch(0.6 0.22 270) 0%,
-    oklch(0.55 0.24 300) 100%
+    oklch(0.63 0.15 175) 0%,
+    oklch(0.57 0.14 190) 100%
   );
 }
 
@@ -204,8 +204,8 @@ html[data-theme="light"] .gradient-text {
 .avatar-accent-ring {
   background: linear-gradient(
     135deg,
-    oklch(0.6 0.18 270),
-    oklch(0.55 0.2 300)
+    oklch(0.62 0.14 175),
+    oklch(0.55 0.13 190)
   );
   padding: 1.5px;
 }

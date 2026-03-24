@@ -63,15 +63,15 @@ export default function SignUpPage() {
     <div className="relative flex min-h-screen items-center justify-center bg-zinc-50 px-4 dark:bg-zinc-950 overflow-hidden">
       {/* Background glow */}
       <div className="pointer-events-none absolute inset-0">
-        <div className="absolute top-1/4 left-1/2 h-[500px] w-[500px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-gradient-to-br from-violet-500/10 via-indigo-500/8 to-transparent blur-3xl" />
+        <div className="absolute top-1/4 left-1/2 h-[500px] w-[500px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-gradient-to-br from-teal-500/10 via-cyan-500/8 to-transparent blur-3xl" />
       </div>
 
       <div className="relative w-full max-w-sm space-y-8">
         <div className="text-center">
           <Link href="/" className="inline-flex items-center gap-2">
             <div className="relative">
-              <div className="absolute inset-0 -m-2 rounded-2xl bg-gradient-to-br from-violet-500/20 to-indigo-500/20 blur-lg" style={{ animation: "glow-pulse 3s ease-in-out infinite" }} />
-              <div className="relative flex h-10 w-10 items-center justify-center rounded-lg gradient-brand shadow-lg shadow-violet-500/25">
+              <div className="absolute inset-0 -m-2 rounded-2xl bg-gradient-to-br from-teal-500/20 to-cyan-500/20 blur-lg" style={{ animation: "glow-pulse 3s ease-in-out infinite" }} />
+              <div className="relative flex h-10 w-10 items-center justify-center rounded-lg gradient-brand shadow-lg shadow-teal-500/25">
                 <span className="text-lg font-bold text-white">H</span>
               </div>
             </div>
