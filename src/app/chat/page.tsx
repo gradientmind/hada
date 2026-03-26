@@ -193,6 +193,7 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
+  const [showConversation, setShowConversation] = useState(false);
   const [user, setUser] = useState<{ email?: string; name?: string } | null>(null);
   const [greetingText, setGreetingText] = useState("Hello");
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
@@ -326,6 +327,7 @@ export default function ChatPage() {
   const sendMessage = async (overrideMessage?: string) => {
     const messageText = overrideMessage ?? input;
     if (!messageText.trim() || isLoading) return;
+    setShowConversation(true);
 
     const tempUserId = `temp-user-${Date.now()}`;
     const tempAssistantId = `temp-assistant-${Date.now()}`;
@@ -698,6 +700,21 @@ export default function ChatPage() {
     }
   }, []);
 
+  const starterPrompts = [
+    "What's on my calendar today?",
+    "Draft an email to my team",
+    "Book a restaurant for Friday",
+    "Research the best project management tools",
+  ];
+
+  const latestUserMessage = [...messages]
+    .reverse()
+    .find((message) => message.role === "user" && message.content.trim());
+  const latestAssistantMessage = [...messages]
+    .reverse()
+    .find((message) => message.role === "assistant" && message.content.trim());
+  const shouldShowLanding = !showConversation && !isLoading;
+
   const inputForm = (
     <form onSubmit={handleSubmit}>
       <div className="glass relative rounded-2xl">
@@ -820,7 +837,7 @@ export default function ChatPage() {
                   <div className="flex flex-col items-center justify-center min-h-[60vh]">
                     <span className="text-sm text-zinc-400">Loading...</span>
                   </div>
-                ) : messages.length === 0 ? (
+                ) : shouldShowLanding ? (
                   <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -839,12 +856,7 @@ export default function ChatPage() {
                     <p className="mt-2 text-zinc-500 text-lg">What can I help you with today?</p>
 
                     <div className="mt-8 grid gap-3 sm:grid-cols-2 w-full max-w-xl">
-                      {[
-                        "What's on my calendar today?",
-                        "Draft an email to my team",
-                        "Book a restaurant for Friday",
-                        "Research the best project management tools",
-                      ].map((suggestion) => (
+                      {starterPrompts.map((suggestion) => (
                         <button
                           key={suggestion}
                           onClick={() => {
@@ -857,6 +869,48 @@ export default function ChatPage() {
                         </button>
                       ))}
                     </div>
+
+                    {messages.length > 0 ? (
+                      <div className="mt-6 w-full max-w-xl rounded-2xl border border-zinc-200/70 bg-white/70 p-4 text-left shadow-sm backdrop-blur-sm dark:border-zinc-800/70 dark:bg-zinc-900/50">
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                              Continue where you left off
+                            </p>
+                            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                              Persistent context is still available. Open the conversation if you want to review or continue it directly.
+                            </p>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setShowConversation(true)}
+                          >
+                            Open chat
+                          </Button>
+                        </div>
+                        {latestUserMessage ? (
+                          <div className="mt-4 rounded-xl bg-zinc-50 px-3 py-2 dark:bg-zinc-950/60">
+                            <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-400">
+                              Last request
+                            </p>
+                            <p className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">
+                              {truncatePreview(latestUserMessage.content, 180)}
+                            </p>
+                          </div>
+                        ) : null}
+                        {latestAssistantMessage ? (
+                          <div className="mt-3 rounded-xl bg-zinc-50 px-3 py-2 dark:bg-zinc-950/60">
+                            <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-400">
+                              Last reply
+                            </p>
+                            <p className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">
+                              {truncatePreview(latestAssistantMessage.content, 220)}
+                            </p>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
 
                     <div className="mt-8 w-full max-w-xl">
                       {inputForm}
@@ -980,7 +1034,7 @@ export default function ChatPage() {
           </div>
 
           {/* Input Area - Fixed at bottom when there are messages */}
-          {messages.length > 0 && (
+          {showConversation && messages.length > 0 && (
             <div className="shrink-0 pb-[max(env(safe-area-inset-bottom),1rem)] pt-3 bg-background/80 border-t border-border/50 backdrop-blur-md">
               {inputForm}
             </div>
@@ -1016,6 +1070,15 @@ function isToolErrorResult(result: string): boolean {
   } catch {
     return false;
   }
+}
+
+function truncatePreview(value: string, maxLength: number): string {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, maxLength).trimEnd()}…`;
 }
 
 function nextEventOrder(ref: MutableRefObject<number>): number {
