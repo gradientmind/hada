@@ -37,9 +37,9 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="h-full flex">
+    <div className="h-full">
       {/* Sidebar for desktop */}
-      <Tabs defaultValue="status" className="flex h-full w-full" orientation="vertical">
+      <Tabs defaultValue="status" className="flex h-full w-full flex-col md:flex-row" orientation="vertical">
         {/* Desktop sidebar */}
         <div className="hidden md:flex w-56 shrink-0 flex-col border-r border-border/60 bg-card/50 p-4 backdrop-blur-sm">
           <TabsList className="flex flex-col h-auto bg-transparent gap-1">
@@ -75,18 +75,20 @@ export default function SettingsPage() {
         </div>
 
         {/* Mobile tabs */}
-        <div className="md:hidden w-full border-b border-border/60 bg-card/50 px-4 backdrop-blur-sm">
-          <TabsList className="w-full justify-start bg-transparent">
-            <TabsTrigger value="status" className="transition-all duration-200 data-[state=active]:border-b-2 data-[state=active]:border-b-teal-500">Status</TabsTrigger>
-            <TabsTrigger value="integrations" className="transition-all duration-200 data-[state=active]:border-b-2 data-[state=active]:border-b-teal-500">Integrations</TabsTrigger>
-            <TabsTrigger value="account" className="transition-all duration-200 data-[state=active]:border-b-2 data-[state=active]:border-b-teal-500">Account</TabsTrigger>
-            <TabsTrigger value="memory" className="transition-all duration-200 data-[state=active]:border-b-2 data-[state=active]:border-b-teal-500">Memory</TabsTrigger>
-          </TabsList>
+        <div className="md:hidden w-full border-b border-border/60 bg-card/50 px-3 py-2 backdrop-blur-sm sm:px-4">
+          <div className="overflow-x-auto pb-1">
+            <TabsList className="min-w-full justify-start gap-1 bg-transparent" variant="line">
+              <TabsTrigger value="status" className="shrink-0 rounded-full px-3 py-1.5 transition-all duration-200 data-[state=active]:bg-zinc-900 data-[state=active]:text-white dark:data-[state=active]:bg-zinc-100 dark:data-[state=active]:text-zinc-900">Status</TabsTrigger>
+              <TabsTrigger value="integrations" className="shrink-0 rounded-full px-3 py-1.5 transition-all duration-200 data-[state=active]:bg-zinc-900 data-[state=active]:text-white dark:data-[state=active]:bg-zinc-100 dark:data-[state=active]:text-zinc-900">Integrations</TabsTrigger>
+              <TabsTrigger value="account" className="shrink-0 rounded-full px-3 py-1.5 transition-all duration-200 data-[state=active]:bg-zinc-900 data-[state=active]:text-white dark:data-[state=active]:bg-zinc-100 dark:data-[state=active]:text-zinc-900">Account</TabsTrigger>
+              <TabsTrigger value="memory" className="shrink-0 rounded-full px-3 py-1.5 transition-all duration-200 data-[state=active]:bg-zinc-900 data-[state=active]:text-white dark:data-[state=active]:bg-zinc-100 dark:data-[state=active]:text-zinc-900">Memory</TabsTrigger>
+            </TabsList>
+          </div>
         </div>
 
         {/* Content area */}
-        <div className="flex-1 overflow-y-auto p-6">
-          <div className="max-w-2xl">
+        <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-6 pt-4 sm:px-4 md:p-6">
+          <div className="max-w-3xl">
             <TabsContent value="status" className="mt-0">
               <StatusTab />
             </TabsContent>

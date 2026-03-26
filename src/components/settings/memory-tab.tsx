@@ -196,12 +196,12 @@ export function MemoryTab() {
 
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <CardTitle className="text-base">Saved memories</CardTitle>
               <CardDescription>Search, edit, add, or delete saved memory items.</CardDescription>
             </div>
-            <Button size="sm" onClick={() => setNewMemoryOpen((value) => !value)}>
+            <Button size="sm" className="w-full sm:w-auto" onClick={() => setNewMemoryOpen((value) => !value)}>
               {newMemoryOpen ? "Cancel" : "Add memory"}
             </Button>
           </div>
@@ -231,7 +231,7 @@ export function MemoryTab() {
                 rows={4}
                 className="min-h-28 w-full rounded-md border border-zinc-200 bg-transparent px-3 py-2 text-sm outline-none focus:border-zinc-400 dark:border-zinc-800 dark:focus:border-zinc-600"
               />
-              <div className="flex justify-end">
+              <div className="flex justify-stretch sm:justify-end">
                 <Button size="sm" onClick={() => void handleCreateMemory()} disabled={isSaving}>
                   {isSaving ? "Saving..." : "Save memory"}
                 </Button>
@@ -279,7 +279,7 @@ export function MemoryTab() {
                           rows={4}
                           className="min-h-28 w-full rounded-md border border-zinc-200 bg-transparent px-3 py-2 text-sm outline-none focus:border-zinc-400 dark:border-zinc-800 dark:focus:border-zinc-600"
                         />
-                        <div className="flex justify-end gap-2">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
                           <Button
                             size="sm"
                             variant="outline"
@@ -308,7 +308,7 @@ export function MemoryTab() {
                             Updated {formatTimestamp(memory.updated_at)}
                           </p>
                         </div>
-                        <div className="flex justify-end gap-2">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
                           <Button
                             size="sm"
                             variant="outline"

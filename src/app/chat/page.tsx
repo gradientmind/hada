@@ -88,7 +88,7 @@ type ChatCard =
 
 function MessageContent({ content }: { content: string }) {
   return (
-    <div className="min-w-0 break-words text-sm leading-relaxed space-y-1 [&>*:last-child]:mb-0">
+    <div className="min-w-0 max-w-full overflow-hidden break-words text-sm leading-relaxed space-y-1 [&>*:last-child]:mb-0">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
@@ -121,16 +121,16 @@ function MessageContent({ content }: { content: string }) {
             <p className="font-semibold mb-1">{children}</p>
           ),
           pre: ({ children }) => (
-            <pre className="bg-zinc-100 dark:bg-zinc-800 rounded-lg p-3 overflow-x-auto text-xs font-mono mb-2 whitespace-pre">
+            <pre className="mb-2 max-w-full overflow-x-auto rounded-lg bg-zinc-100 p-3 font-mono text-xs whitespace-pre dark:bg-zinc-800">
               {children}
             </pre>
           ),
           code: ({ className, children }) => {
             const isBlock = !!className;
             return isBlock ? (
-              <code className={className}>{children}</code>
+              <code className={`${className} break-words`}>{children}</code>
             ) : (
-              <code className="bg-zinc-100 dark:bg-zinc-800 rounded px-1 py-0.5 text-xs font-mono">
+              <code className="break-all rounded bg-zinc-100 px-1 py-0.5 font-mono text-xs dark:bg-zinc-800">
                 {children}
               </code>
             );
@@ -140,7 +140,7 @@ function MessageContent({ content }: { content: string }) {
               href={href}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-blue-600 dark:text-blue-400 underline hover:no-underline"
+              className="break-all text-blue-600 underline hover:no-underline dark:text-blue-400"
             >
               {children}
             </a>
@@ -151,17 +151,17 @@ function MessageContent({ content }: { content: string }) {
             </blockquote>
           ),
           table: ({ children }) => (
-            <div className="overflow-x-auto mb-2">
-              <table className="text-xs border-collapse w-full">{children}</table>
+            <div className="mb-2 max-w-full overflow-x-auto">
+              <table className="w-full min-w-[28rem] border-collapse text-xs">{children}</table>
             </div>
           ),
           th: ({ children }) => (
-            <th className="border border-zinc-300 dark:border-zinc-600 px-3 py-1.5 bg-zinc-50 dark:bg-zinc-800 font-semibold text-left">
+            <th className="border border-zinc-300 bg-zinc-50 px-3 py-1.5 text-left font-semibold dark:border-zinc-600 dark:bg-zinc-800">
               {children}
             </th>
           ),
           td: ({ children }) => (
-            <td className="border border-zinc-300 dark:border-zinc-600 px-3 py-1.5">
+            <td className="border border-zinc-300 px-3 py-1.5 break-words align-top dark:border-zinc-600">
               {children}
             </td>
           ),
@@ -784,59 +784,63 @@ export default function ChatPage() {
     <div className="flex h-screen flex-col bg-zinc-50 dark:bg-zinc-950">
       {/* Header */}
 
-      <header className="flex items-center justify-between bg-white/70 backdrop-blur-md border-b border-zinc-200/80 px-4 py-3 dark:bg-zinc-900/60 dark:border-zinc-800/60">
-        <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg gradient-brand shadow-md shadow-teal-500/20">
-            <span className="text-sm font-bold text-white">H</span>
+      <header className="border-b border-zinc-200/80 bg-white/70 px-3 py-3 backdrop-blur-md dark:border-zinc-800/60 dark:bg-zinc-900/60 sm:px-4">
+        <div className="mx-auto flex w-full max-w-5xl flex-wrap items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg gradient-brand shadow-md shadow-teal-500/20">
+              <span className="text-sm font-bold text-white">H</span>
+            </div>
+            <span className="truncate font-semibold">Hada</span>
+            {/* Connection status indicator */}
+            <Link
+              href="/settings"
+              className="flex items-center gap-1.5 text-xs text-zinc-400 transition-colors hover:text-zinc-600 dark:hover:text-zinc-300"
+              title={`Status: ${connectionStatus}`}
+            >
+              <span
+                className={`h-2 w-2 rounded-full ${
+                  connectionStatus === "connected"
+                    ? "bg-green-500"
+                    : connectionStatus === "degraded"
+                    ? "bg-yellow-500"
+                    : connectionStatus === "connecting"
+                    ? "bg-yellow-500 animate-pulse"
+                    : "bg-red-500"
+                }`}
+              />
+              <span className="hidden sm:inline">
+                {connectionStatus === "connected" && "Online"}
+                {connectionStatus === "degraded" && "Fallback"}
+                {connectionStatus === "connecting" && "Connecting"}
+                {connectionStatus === "disconnected" && "Offline"}
+              </span>
+            </Link>
           </div>
-          <span className="font-semibold">Hada</span>
-          {/* Connection status indicator */}
-          <Link
-            href="/settings"
-            className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
-            title={`Status: ${connectionStatus}`}
-          >
-            <span
-              className={`h-2 w-2 rounded-full ${
-                connectionStatus === "connected"
-                  ? "bg-green-500"
-                  : connectionStatus === "degraded"
-                  ? "bg-yellow-500"
-                  : connectionStatus === "connecting"
-                  ? "bg-yellow-500 animate-pulse"
-                  : "bg-red-500"
-              }`}
-            />
-            <span className="hidden sm:inline">
-              {connectionStatus === "connected" && "Online"}
-              {connectionStatus === "degraded" && "Fallback"}
-              {connectionStatus === "connecting" && "Connecting"}
-              {connectionStatus === "disconnected" && "Offline"}
-            </span>
-          </Link>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground hidden sm:block">{user?.email}</span>
-          <ThemeToggle />
-          <Link href="/dashboard">
-            <Button variant="ghost" size="icon" aria-label="Open dashboard">
-              <LayoutDashboard className="h-4 w-4" />
+          <div className="flex w-full items-center justify-end gap-1.5 sm:w-auto sm:gap-2">
+            <span className="hidden text-sm text-muted-foreground lg:block">{user?.email}</span>
+            <ThemeToggle />
+            <Link href="/dashboard">
+              <Button variant="ghost" size="icon" aria-label="Open dashboard">
+                <LayoutDashboard className="h-4 w-4" />
+              </Button>
+            </Link>
+            <Link href="/settings">
+              <Button variant="ghost" size="sm" className="px-2 sm:px-3">
+                <span className="sm:hidden">Prefs</span>
+                <span className="hidden sm:inline">Settings</span>
+              </Button>
+            </Link>
+            <Button variant="ghost" size="sm" className="px-2 sm:px-3" onClick={handleSignOut}>
+              <span className="sm:hidden">Exit</span>
+              <span className="hidden sm:inline">Sign out</span>
             </Button>
-          </Link>
-          <Link href="/settings">
-            <Button variant="ghost" size="sm">
-              Settings
-            </Button>
-          </Link>
-          <Button variant="ghost" size="sm" onClick={handleSignOut}>
-            Sign out
-          </Button>
+          </div>
         </div>
       </header>
 
       {/* Main Content Area */}
       <div className="flex-1 overflow-hidden">
-        <div className="h-full flex flex-col max-w-3xl mx-auto px-4">
+        <div className="mx-auto flex h-full max-w-5xl flex-col px-3 sm:px-4 md:px-6">
 
           {/* Messages Area */}
           <div className="flex-1 min-h-0 py-4">
@@ -866,7 +870,7 @@ export default function ChatPage() {
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ duration: 0.25, ease: "easeOut" }}
-                    className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4"
+                    className="flex min-h-[60vh] flex-col items-center justify-center px-2 text-center sm:px-4"
                   >
                     <div className="relative mb-6">
                       <div className="absolute inset-0 -m-3 rounded-3xl bg-gradient-to-br from-teal-500/20 via-cyan-500/15 to-teal-400/20 blur-xl" style={{ animation: "glow-pulse 3s ease-in-out infinite" }} />
@@ -874,12 +878,12 @@ export default function ChatPage() {
                         <span className="text-2xl font-bold text-white">H</span>
                       </div>
                     </div>
-                    <h1 className="text-3xl font-semibold">
+                    <h1 className="text-2xl font-semibold sm:text-3xl">
                       <span className="gradient-text">{greetingText}</span>, {user?.name || "there"}
                     </h1>
-                    <p className="mt-2 text-zinc-500 text-lg">What can I help you with today?</p>
+                    <p className="mt-2 text-base text-zinc-500 sm:text-lg">What can I help you with today?</p>
 
-                    <div className="mt-8 grid gap-3 sm:grid-cols-2 w-full max-w-xl">
+                    <div className="mt-8 grid w-full max-w-2xl gap-3 sm:grid-cols-2">
                       {starterPrompts.map((shortcut) => (
                         <button
                           key={shortcut.title}
@@ -902,7 +906,7 @@ export default function ChatPage() {
                     </div>
 
                     {messages.length > 0 ? (
-                      <div className="mt-6 w-full max-w-xl rounded-2xl border border-zinc-200/70 bg-white/70 p-4 text-left shadow-sm backdrop-blur-sm dark:border-zinc-800/70 dark:bg-zinc-900/50">
+                      <div className="mt-6 w-full max-w-2xl rounded-2xl border border-zinc-200/70 bg-white/70 p-4 text-left shadow-sm backdrop-blur-sm dark:border-zinc-800/70 dark:bg-zinc-900/50">
                         <div className="flex items-start justify-between gap-4">
                           <div>
                             <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
@@ -943,7 +947,7 @@ export default function ChatPage() {
                       </div>
                     ) : null}
 
-                    <div className="mt-8 w-full max-w-xl">
+                    <div className="mt-8 w-full max-w-2xl">
                       {inputForm}
                     </div>
                   </motion.div>
@@ -956,7 +960,7 @@ export default function ChatPage() {
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         transition={{ duration: 0.18, ease: "easeOut" }}
-                        className="flex gap-3 min-w-0"
+                        className="flex min-w-0 gap-2 sm:gap-3"
                       >
                         {message.role === "assistant" ? (
                           <div className="h-8 w-8 shrink-0 rounded-full avatar-accent-ring">
@@ -973,7 +977,7 @@ export default function ChatPage() {
                             </AvatarFallback>
                           </Avatar>
                         )}
-                        <div className="min-w-0 flex-1 pt-1 space-y-3">
+                        <div className="min-w-0 flex-1 overflow-hidden pt-1 space-y-3">
                           {/* Agent trace timeline */}
                           {message.role === "assistant" && (message.traceEvents?.length || message.thinkingEvents?.length) ? (
                             <AgentTraceTimeline
@@ -984,7 +988,7 @@ export default function ChatPage() {
                           {message.role === "assistant" && message.plan ? (
                             <TaskPlanCard plan={message.plan} activeStepId={message.activeStepId} />
                           ) : null}
-                          <div className={message.isError ? "text-red-500 dark:text-red-400" : undefined}>
+                          <div className={`min-w-0 overflow-hidden ${message.isError ? "text-red-500 dark:text-red-400" : ""}`}>
                             {message.isStreaming && !message.content ? (
                               <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-zinc-200/70 bg-zinc-50/80 px-3 py-1.5 text-xs text-zinc-500 dark:border-zinc-800/70 dark:bg-zinc-950/50 dark:text-zinc-400">
                                 <div className="bounce-dots">
@@ -1064,7 +1068,7 @@ export default function ChatPage() {
 
           {/* Input Area - Fixed at bottom when there are messages */}
           {showConversation && messages.length > 0 && (
-            <div className="shrink-0 pb-[max(env(safe-area-inset-bottom),1rem)] pt-3 bg-background/80 border-t border-border/50 backdrop-blur-md">
+            <div className="shrink-0 border-t border-border/50 bg-background/80 pb-[max(env(safe-area-inset-bottom),1rem)] pt-3 backdrop-blur-md">
               {inputForm}
             </div>
           )}

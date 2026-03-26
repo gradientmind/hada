@@ -177,15 +177,15 @@ export function AccountTab() {
           <CardDescription>Your account information.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center justify-between text-sm">
+          <div className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:justify-between">
             <span className="text-zinc-500 dark:text-zinc-400">Email</span>
-            <span>{profile?.email || "—"}</span>
+            <span className="break-all">{profile?.email || "—"}</span>
           </div>
-          <div className="flex items-center justify-between text-sm">
+          <div className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:justify-between">
             <span className="text-zinc-500 dark:text-zinc-400">Name</span>
             <span>{profile?.name || "Not set"}</span>
           </div>
-          <div className="flex items-center justify-between text-sm">
+          <div className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:justify-between">
             <span className="text-zinc-500 dark:text-zinc-400">Member since</span>
             <span>{profile?.created_at ? formatDate(profile.created_at) : "—"}</span>
           </div>
@@ -194,7 +194,7 @@ export function AccountTab() {
 
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <CardTitle className="text-base">Subscription</CardTitle>
               <CardDescription>Your current plan.</CardDescription>
@@ -255,7 +255,7 @@ export function AccountTab() {
               placeholder="e.g. America/Los_Angeles"
             />
           </div>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <span className="text-xs text-zinc-500">{saveMessage || ""}</span>
             <Button size="sm" onClick={saveSettings} disabled={saving}>
               {saving ? "Saving..." : "Save"}
@@ -275,12 +275,12 @@ export function AccountTab() {
           <p className="text-sm text-zinc-600 dark:text-zinc-400">
             This removes your current chat thread and its saved message history. A new conversation will be created automatically the next time you send a message.
           </p>
-          <div className="flex items-center justify-between gap-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <span className="text-xs text-zinc-500">{clearChatMessage || ""}</span>
             <Button
               size="sm"
               variant="outline"
-              className="border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/30"
+              className="w-full sm:w-auto border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/30"
               onClick={() => void clearChat()}
               disabled={clearingChat}
             >

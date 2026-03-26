@@ -49,7 +49,7 @@ export function StatusTab() {
       {/* Overall Status Card */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
               <div className={`h-3 w-3 rounded-full ${config.color} animate-pulse`} />
               <CardTitle className="text-lg">Agent Runtime</CardTitle>
@@ -71,20 +71,20 @@ export function StatusTab() {
           <CardTitle className="text-base">Runtime Connection</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center justify-between text-sm">
+          <div className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:justify-between">
             <span className="text-zinc-500 dark:text-zinc-400">Status</span>
             <span className="flex items-center gap-2">
               <span className={`h-2 w-2 rounded-full ${health?.gateway.connected ? "bg-green-500" : "bg-red-500"}`} />
               {health?.gateway.connected ? "Connected" : "Disconnected"}
             </span>
           </div>
-          <div className="flex items-center justify-between text-sm">
+          <div className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:justify-between">
             <span className="text-zinc-500 dark:text-zinc-400">Endpoint</span>
-            <code className="text-xs bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded">
+            <code className="max-w-full overflow-x-auto rounded bg-zinc-100 px-2 py-1 text-xs dark:bg-zinc-800">
               {health?.gateway.url || "—"}
             </code>
           </div>
-          <div className="flex items-center justify-between text-sm">
+          <div className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:justify-between">
             <span className="text-zinc-500 dark:text-zinc-400">Last Check</span>
             <span>{health?.gateway.lastCheck ? formatTime(health.gateway.lastCheck) : "—"}</span>
           </div>
@@ -100,14 +100,14 @@ export function StatusTab() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-center justify-between text-sm">
+            <div className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:justify-between">
               <span className="text-zinc-500 dark:text-zinc-400">Status</span>
               <span className="flex items-center gap-2">
                 <span className={`h-2 w-2 rounded-full ${health?.llmFallback.available ? "bg-green-500" : "bg-zinc-300"}`} />
                 {health?.llmFallback.available ? "Available" : "Not Configured"}
               </span>
             </div>
-            <div className="flex items-center justify-between text-sm">
+            <div className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:justify-between">
               <span className="text-zinc-500 dark:text-zinc-400">Provider</span>
               <span className="capitalize">{health?.llmFallback.provider || "—"}</span>
             </div>
@@ -125,7 +125,7 @@ export function StatusTab() {
       )}
 
       {/* Refresh Button */}
-      <div className="flex justify-end">
+      <div className="flex justify-start sm:justify-end">
         <Button variant="outline" size="sm" onClick={refresh} disabled={isLoading}>
           {isLoading ? "Checking..." : "Refresh Status"}
         </Button>

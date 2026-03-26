@@ -3,6 +3,8 @@ import { processMessage } from "@/lib/chat/process-message";
 import { createClient } from "@/lib/supabase/server";
 import type { AgentEvent } from "@/lib/types/database";
 
+export const maxDuration = 600;
+
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
   const {

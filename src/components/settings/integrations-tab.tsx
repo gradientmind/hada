@@ -157,7 +157,7 @@ export function IntegrationsTab() {
       <div className="grid gap-4">
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <div className="flex items-center gap-2">
                   <CardTitle className="text-base">Google</CardTitle>
@@ -177,6 +177,7 @@ export function IntegrationsTab() {
               <Button
                 size="sm"
                 variant={googleStatus.connected ? "outline" : "default"}
+                className="w-full sm:w-auto"
                 onClick={googleStatus.connected ? handleGoogleDisconnect : handleGoogleConnect}
                 disabled={loadingGoogle}
               >
@@ -188,7 +189,7 @@ export function IntegrationsTab() {
 
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <div className="flex items-center gap-2">
                   <CardTitle className="text-base">Telegram</CardTitle>
@@ -216,6 +217,7 @@ export function IntegrationsTab() {
               <Button
                 size="sm"
                 variant={telegramStatus.connected ? "outline" : "default"}
+                className="w-full sm:w-auto"
                 onClick={handleTelegramConnect}
                 disabled={loadingTelegram || telegramStatus.connected}
               >
@@ -227,12 +229,12 @@ export function IntegrationsTab() {
 
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <CardTitle className="text-base">WhatsApp</CardTitle>
                 <CardDescription>Planned integration.</CardDescription>
               </div>
-              <Button size="sm" variant="outline" disabled>
+              <Button size="sm" variant="outline" className="w-full sm:w-auto" disabled>
                 Coming Soon
               </Button>
             </div>
@@ -241,12 +243,12 @@ export function IntegrationsTab() {
 
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <CardTitle className="text-base">Microsoft</CardTitle>
                 <CardDescription>Planned integration.</CardDescription>
               </div>
-              <Button size="sm" variant="outline" disabled>
+              <Button size="sm" variant="outline" className="w-full sm:w-auto" disabled>
                 Coming Soon
               </Button>
             </div>

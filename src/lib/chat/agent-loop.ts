@@ -22,27 +22,52 @@ export interface AgentLoopOptions {
   tools: AgentTool[];
   provider: ProviderSelection;
   timeout?: number;
+  idleTimeout?: number;
   maxErrors?: number;
   maxIterations?: number;
 }
 
-const DEFAULT_TIMEOUT_MS = 60_000;
+const DEFAULT_TIMEOUT_MS = 180_000;
+const DEFAULT_IDLE_TIMEOUT_MS = 90_000;
 const DEFAULT_MAX_ERRORS = 3;
 const TOOL_RESULT_LIMIT = 8_000;
 const PLAN_TASK_TOOL_NAME = "plan_task";
 
 export async function* agentLoop(options: AgentLoopOptions): AsyncGenerator<AgentEvent> {
-  const startedAt = Date.now();
   const timeoutMs = options.timeout ?? DEFAULT_TIMEOUT_MS;
+  const idleTimeoutMs = options.idleTimeout ?? DEFAULT_IDLE_TIMEOUT_MS;
   const maxErrors = options.maxErrors ?? DEFAULT_MAX_ERRORS;
   const maxIterations =
     typeof options.maxIterations === "number" && options.maxIterations > 0
       ? Math.trunc(options.maxIterations)
       : null;
   const timeoutController = new AbortController();
-  const timeoutHandle = setTimeout(() => {
+  let timeoutReason: "hard" | "idle" | null = null;
+  let idleTimeoutHandle: ReturnType<typeof setTimeout> | null = null;
+  const abortForTimeout = (reason: "hard" | "idle") => {
+    if (timeoutReason) {
+      return;
+    }
+
+    timeoutReason = reason;
     timeoutController.abort();
+  };
+  const timeoutHandle = setTimeout(() => {
+    abortForTimeout("hard");
   }, timeoutMs);
+  const markProgress = () => {
+    if (timeoutController.signal.aborted) {
+      return;
+    }
+
+    if (idleTimeoutHandle) {
+      clearTimeout(idleTimeoutHandle);
+    }
+
+    idleTimeoutHandle = setTimeout(() => {
+      abortForTimeout("idle");
+    }, idleTimeoutMs);
+  };
   const toolMap = new Map(options.tools.map((tool) => [tool.name, tool]));
   const llmMessages: LLMMessage[] = [
     { role: "system", content: options.systemPrompt },
@@ -64,9 +89,11 @@ export async function* agentLoop(options: AgentLoopOptions): AsyncGenerator<Agen
   let deferredActionRecoveryAttempts = 0;
 
   try {
+    markProgress();
+
     while (true) {
-      if (timeoutController.signal.aborted || Date.now() - startedAt > timeoutMs) {
-        yield { type: "error", message: "Agent timed out before finishing the response." };
+      if (timeoutController.signal.aborted) {
+        yield { type: "error", message: buildTimeoutMessage(timeoutReason, timeoutMs, idleTimeoutMs) };
         return;
       }
 
@@ -77,16 +104,19 @@ export async function* agentLoop(options: AgentLoopOptions): AsyncGenerator<Agen
         }
 
         iterationCount += 1;
+        markProgress();
         const result = await callLLMWithRetry({
           selection: options.provider,
           messages: buildMessagesForIteration(llmMessages, activePlan, currentStepIndex),
           tools: llmTools,
           signal: timeoutController.signal,
         });
+        markProgress();
 
         const rawContent = result.content || "";
         const thinkingContent = summarizeThinkingForDisplay(rawContent);
         if (thinkingContent) {
+          markProgress();
           yield { type: "thinking", content: thinkingContent };
         }
         const visibleContent = sanitizeAssistantContent(rawContent);
@@ -132,6 +162,7 @@ export async function* agentLoop(options: AgentLoopOptions): AsyncGenerator<Agen
           if (visibleContent) {
             finalText += visibleContent;
             for (const chunk of chunkText(visibleContent, 140)) {
+              markProgress();
               yield { type: "text_delta", content: chunk };
             }
           }
@@ -171,12 +202,15 @@ export async function* agentLoop(options: AgentLoopOptions): AsyncGenerator<Agen
 
             if (matchedStep.status !== "running") {
               matchedStep.status = "running";
+              markProgress();
               yield { type: "step_started", stepId: matchedStep.id, planId: activePlan.id };
             }
           }
 
+          markProgress();
           yield { type: "tool_call", name: call.name, args: call.arguments, callId };
 
+          markProgress();
           const tool = toolMap.get(call.name);
           const toolStart = Date.now();
           const toolResult = await runTool(tool, call.arguments, timeoutController.signal);
@@ -184,6 +218,7 @@ export async function* agentLoop(options: AgentLoopOptions): AsyncGenerator<Agen
           const sanitized = sanitizeToolResult(toolResult);
           const truncated = toolResult.trim().length > TOOL_RESULT_LIMIT;
 
+          markProgress();
           yield { type: "tool_result", name: call.name, result: sanitized, callId, durationMs, truncated };
           llmMessages.push({
             role: "tool",
@@ -198,6 +233,7 @@ export async function* agentLoop(options: AgentLoopOptions): AsyncGenerator<Agen
               activePlan = parsedPlan;
               currentStepIndex = findNextOpenStepIndex(parsedPlan);
               completedStepTools.clear();
+              markProgress();
               yield { type: "plan_created", plan: clonePlan(parsedPlan) };
             }
             continue;
@@ -209,6 +245,7 @@ export async function* agentLoop(options: AgentLoopOptions): AsyncGenerator<Agen
 
           if (didToolFail(toolResult)) {
             matchedStep.status = "failed";
+            markProgress();
             yield {
               type: "step_failed",
               stepId: matchedStep.id,
@@ -221,6 +258,7 @@ export async function* agentLoop(options: AgentLoopOptions): AsyncGenerator<Agen
           markStepToolCompleted(completedStepTools, matchedStep, call.name);
           if (isStepComplete(matchedStep, completedStepTools)) {
             matchedStep.status = "done";
+            markProgress();
             yield {
               type: "step_completed",
               stepId: matchedStep.id,
@@ -240,7 +278,7 @@ export async function* agentLoop(options: AgentLoopOptions): AsyncGenerator<Agen
         consecutiveErrors = 0;
       } catch (error) {
         if (timeoutController.signal.aborted || isAbortError(error)) {
-          yield { type: "error", message: "Agent timed out before finishing the response." };
+          yield { type: "error", message: buildTimeoutMessage(timeoutReason, timeoutMs, idleTimeoutMs) };
           return;
         }
 
@@ -254,6 +292,7 @@ export async function* agentLoop(options: AgentLoopOptions): AsyncGenerator<Agen
             `The previous attempt failed with a runtime error: ${message}. ` +
             "Continue from the existing conversation state. If a tool is still needed, call it again explicitly.",
         });
+        markProgress();
 
         if (consecutiveErrors >= maxErrors) {
           yield { type: "error", message: `Agent stopped after ${consecutiveErrors} errors: ${message}` };
@@ -263,6 +302,9 @@ export async function* agentLoop(options: AgentLoopOptions): AsyncGenerator<Agen
     }
   } finally {
     clearTimeout(timeoutHandle);
+    if (idleTimeoutHandle) {
+      clearTimeout(idleTimeoutHandle);
+    }
   }
 }
 
@@ -651,6 +693,32 @@ function isAbortError(error: unknown): boolean {
   return error instanceof DOMException
     ? error.name === "AbortError"
     : error instanceof Error && error.name === "AbortError";
+}
+
+function buildTimeoutMessage(
+  reason: "hard" | "idle" | null,
+  timeoutMs: number,
+  idleTimeoutMs: number,
+): string {
+  if (reason === "idle") {
+    return `Agent timed out after ${formatDurationForMessage(idleTimeoutMs)} without progress.`;
+  }
+
+  return `Agent timed out after ${formatDurationForMessage(timeoutMs)} of total runtime.`;
+}
+
+function formatDurationForMessage(durationMs: number): string {
+  const totalSeconds = Math.max(1, Math.round(durationMs / 1000));
+  if (totalSeconds < 60) {
+    return `${totalSeconds} seconds`;
+  }
+
+  const minutes = totalSeconds / 60;
+  if (Number.isInteger(minutes)) {
+    return `${minutes} minute${minutes === 1 ? "" : "s"}`;
+  }
+
+  return `${minutes.toFixed(1)} minutes`;
 }
 
 function isRateLimitError(error: unknown): boolean {

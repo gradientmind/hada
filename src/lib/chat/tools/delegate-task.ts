@@ -107,6 +107,7 @@ export function createDelegateTaskTool(context: ToolContext): AgentTool {
           tools,
           provider,
           timeout: profile.timeout,
+          idleTimeout: profile.idleTimeout,
           maxErrors: 2,
           maxIterations: profile.maxIterations,
         })) {

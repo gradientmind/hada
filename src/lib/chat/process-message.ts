@@ -102,6 +102,7 @@ export async function processMessage(options: ProcessMessageOptions): Promise<Pr
 
   let assembled = "";
   let fatalError: string | null = null;
+  const runBudget = resolveRunBudget(options.message);
 
   try {
     for await (const event of agentLoop({
@@ -109,6 +110,8 @@ export async function processMessage(options: ProcessMessageOptions): Promise<Pr
       systemPrompt,
       tools,
       provider,
+      timeout: runBudget.timeoutMs,
+      idleTimeout: runBudget.idleTimeoutMs,
     })) {
       if (event.type === "text_delta") {
         assembled += event.content;
@@ -186,6 +189,52 @@ export async function processMessage(options: ProcessMessageOptions): Promise<Pr
   }
 
   return result;
+}
+
+function resolveRunBudget(message: string): {
+  timeoutMs: number;
+  idleTimeoutMs: number;
+} {
+  const normalized = message.replace(/\s+/g, " ").trim().toLowerCase();
+
+  const longJobHints = [
+    "research",
+    "deep dive",
+    "write a memo",
+    "write me a memo",
+    "memo",
+    "report",
+    "analyze",
+    "analysis",
+    "compare",
+    "comparison",
+    "summarize",
+    "summary",
+    "search the web",
+    "search multiple sources",
+    "read the most relevant",
+    "latest developments",
+    "latest news",
+    "comprehensive",
+    "detailed",
+    "investigate",
+  ];
+
+  const isLongJob =
+    normalized.length >= 180 ||
+    longJobHints.some((hint) => normalized.includes(hint));
+
+  if (isLongJob) {
+    return {
+      timeoutMs: 600_000,
+      idleTimeoutMs: 180_000,
+    };
+  }
+
+  return {
+    timeoutMs: 180_000,
+    idleTimeoutMs: 90_000,
+  };
 }
 
 async function emitEvent(

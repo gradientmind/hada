@@ -84,11 +84,11 @@ function AgentTraceCard({ trace }: { trace: TraceEvent }) {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.15 }}
-      className="overflow-hidden"
+      className="min-w-0 overflow-hidden"
     >
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg bg-zinc-100/80 dark:bg-zinc-800/60 hover:bg-zinc-200/80 dark:hover:bg-zinc-700/60 transition-colors text-left group"
+        className="group flex w-full min-w-0 items-center gap-2.5 rounded-lg bg-zinc-100/80 px-3 py-2 text-left transition-colors hover:bg-zinc-200/80 dark:bg-zinc-800/60 dark:hover:bg-zinc-700/60"
       >
         {/* Status dot */}
         {trace.status === "running" ? (
@@ -101,10 +101,10 @@ function AgentTraceCard({ trace }: { trace: TraceEvent }) {
 
         {/* Tool icon and name */}
         <Icon className={`h-3.5 w-3.5 ${meta.color} shrink-0`} />
-        <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">{meta.label}</span>
+        <span className="shrink-0 text-xs font-medium text-zinc-700 dark:text-zinc-300">{meta.label}</span>
 
         {/* Args preview */}
-        <span className="text-xs text-zinc-400 dark:text-zinc-500 truncate flex-1">
+        <span className="min-w-0 flex-1 truncate text-xs text-zinc-400 dark:text-zinc-500">
           {argsPreview}
         </span>
 
@@ -184,15 +184,15 @@ function ThinkingCard({ content }: { content: string }) {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.15 }}
-      className="overflow-hidden"
+      className="min-w-0 overflow-hidden"
     >
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg bg-zinc-100/80 dark:bg-zinc-900/60 hover:bg-zinc-200/80 dark:hover:bg-zinc-800/70 transition-colors text-left group"
+        className="group flex w-full min-w-0 items-center gap-2.5 rounded-lg bg-zinc-100/80 px-3 py-2 text-left transition-colors hover:bg-zinc-200/80 dark:bg-zinc-900/60 dark:hover:bg-zinc-800/70"
       >
         <Brain className="h-3.5 w-3.5 text-teal-500 shrink-0" />
-        <span className="text-xs font-medium text-zinc-700 dark:text-zinc-200">Reasoning</span>
-        <span className="text-xs text-zinc-500 dark:text-zinc-400 truncate flex-1">
+        <span className="shrink-0 text-xs font-medium text-zinc-700 dark:text-zinc-200">Reasoning</span>
+        <span className="min-w-0 flex-1 truncate text-xs text-zinc-500 dark:text-zinc-400">
           {truncateStr(content, 80)}
         </span>
         {expanded ? (
