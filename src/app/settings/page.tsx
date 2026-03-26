@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StatusTab } from "@/components/settings/status-tab";
 import { IntegrationsTab } from "@/components/settings/integrations-tab";
 import { AccountTab } from "@/components/settings/account-tab";
+import { MemoryTab } from "@/components/settings/memory-tab";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -63,6 +64,13 @@ export default function SettingsPage() {
               <AccountIcon className="mr-2 h-4 w-4" />
               Account
             </TabsTrigger>
+            <TabsTrigger
+              value="memory"
+              className="w-full justify-start px-3 py-2 text-left rounded-lg transition-all duration-200 data-[state=active]:bg-muted data-[state=active]:border-l-2 data-[state=active]:border-l-teal-500 data-[state=active]:shadow-sm"
+            >
+              <MemoryIcon className="mr-2 h-4 w-4" />
+              Memory
+            </TabsTrigger>
           </TabsList>
         </div>
 
@@ -72,6 +80,7 @@ export default function SettingsPage() {
             <TabsTrigger value="status" className="transition-all duration-200 data-[state=active]:border-b-2 data-[state=active]:border-b-teal-500">Status</TabsTrigger>
             <TabsTrigger value="integrations" className="transition-all duration-200 data-[state=active]:border-b-2 data-[state=active]:border-b-teal-500">Integrations</TabsTrigger>
             <TabsTrigger value="account" className="transition-all duration-200 data-[state=active]:border-b-2 data-[state=active]:border-b-teal-500">Account</TabsTrigger>
+            <TabsTrigger value="memory" className="transition-all duration-200 data-[state=active]:border-b-2 data-[state=active]:border-b-teal-500">Memory</TabsTrigger>
           </TabsList>
         </div>
 
@@ -86,6 +95,9 @@ export default function SettingsPage() {
             </TabsContent>
             <TabsContent value="account" className="mt-0">
               <AccountTab />
+            </TabsContent>
+            <TabsContent value="memory" className="mt-0">
+              <MemoryTab />
             </TabsContent>
           </div>
         </div>
@@ -115,6 +127,18 @@ function AccountIcon({ className }: { className?: string }) {
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
       <circle cx="12" cy="8" r="5" />
       <path d="M20 21a8 8 0 0 0-16 0" />
+    </svg>
+  );
+}
+
+function MemoryIcon({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M12 5c-4.5 0-8 2-8 4.5S7.5 14 12 14s8-2 8-4.5S16.5 5 12 5Z" />
+      <path d="M4 9.5V15c0 2.5 3.5 4.5 8 4.5s8-2 8-4.5V9.5" />
+      <path d="M8 12.5v3" />
+      <path d="M12 13.5V17" />
+      <path d="M16 12.5v3" />
     </svg>
   );
 }

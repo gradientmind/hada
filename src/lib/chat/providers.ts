@@ -42,7 +42,7 @@ export interface LLMResult {
 export const PROVIDERS: Record<LLMProviderName, ProviderConfig> = {
   minimax: {
     baseUrl: "https://api.minimax.io/v1",
-    defaultModel: "MiniMax-M2.1",
+    defaultModel: "MiniMax-M2.7",
     apiKeyEnv: "MINIMAX_API_KEY",
   },
   anthropic: {

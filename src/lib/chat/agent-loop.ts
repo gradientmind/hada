@@ -85,7 +85,7 @@ export async function* agentLoop(options: AgentLoopOptions): AsyncGenerator<Agen
         });
 
         const rawContent = result.content || "";
-        const thinkingContent = extractThinkingContent(rawContent);
+        const thinkingContent = summarizeThinkingForDisplay(rawContent);
         if (thinkingContent) {
           yield { type: "thinking", content: thinkingContent };
         }
@@ -716,6 +716,44 @@ function extractThinkingContent(text: string): string | null {
   if (!text) return null;
   const match = text.match(/<think>([\s\S]*?)<\/think>/i);
   return match?.[1]?.trim() || null;
+}
+
+function summarizeThinkingForDisplay(text: string): string | null {
+  const rawThinking = extractThinkingContent(text);
+  if (!rawThinking) {
+    return null;
+  }
+
+  const normalized = rawThinking.replace(/\s+/g, " ").trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+
+  if (/\b(system prompt|instructions|runtime context|provided in the prompt|my instructions)\b/.test(normalized)) {
+    return "Reviewing the request and preparing a response.";
+  }
+
+  if (/\bweb_search|search\b|\bresearch\b|\bsources?\b|\bcompare\b/.test(normalized)) {
+    return "Researching sources and gathering results.";
+  }
+
+  if (/\bcalendar\b|\bschedule\b|\bmeeting\b|\bevent\b/.test(normalized)) {
+    return "Checking scheduling details and next steps.";
+  }
+
+  if (/\bmemory\b|\bremember\b|\bpreferences?\b/.test(normalized)) {
+    return "Reviewing relevant memory and user context.";
+  }
+
+  if (/\bemail\b|\bdraft\b|\bwrite\b|\breply\b/.test(normalized)) {
+    return "Drafting the response.";
+  }
+
+  if (/\btool\b|\bcall\b|\bfunction\b/.test(normalized)) {
+    return "Choosing the next action.";
+  }
+
+  return "Analyzing the request and deciding the next step.";
 }
 
 function isDeferredToolIntentResponse(text: string): boolean {

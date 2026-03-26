@@ -3,7 +3,9 @@ import { callLLM, type LLMMessage, type ProviderSelection } from "@/lib/chat/pro
 import type { MessageMetadata } from "@/lib/types/database";
 
 const DEFAULT_MAX_RECENT_MESSAGES = 50;
-const DEFAULT_CONTEXT_TOKEN_BUDGET = 8_000;
+const DEFAULT_CONTEXT_TOKEN_BUDGET = 16_000;
+const DEFAULT_COMPACTION_SUMMARY_TOKEN_BUDGET = 4_000;
+const DEFAULT_MAX_COMPACTION_SUMMARIES = 4;
 const COMPACTION_THRESHOLD = 200;
 
 export interface ContextAssemblyResult {
@@ -16,17 +18,24 @@ export async function assembleConversationContext(options: {
   conversationId: string;
   maxRecentMessages?: number;
   tokenBudget?: number;
+  summaryTokenBudget?: number;
+  maxCompactionSummaries?: number;
 }): Promise<ContextAssemblyResult> {
   const maxRecentMessages = options.maxRecentMessages ?? DEFAULT_MAX_RECENT_MESSAGES;
   const tokenBudget = options.tokenBudget ?? DEFAULT_CONTEXT_TOKEN_BUDGET;
+  const summaryTokenBudget =
+    options.summaryTokenBudget ?? DEFAULT_COMPACTION_SUMMARY_TOKEN_BUDGET;
+  const maxCompactionSummaries =
+    options.maxCompactionSummaries ?? DEFAULT_MAX_COMPACTION_SUMMARIES;
 
   const [summaryResult, recentResult] = await Promise.all([
     options.supabase
       .from("messages")
       .select("content, metadata, created_at")
       .eq("conversation_id", options.conversationId)
+      .contains("metadata", { type: "compaction" })
       .order("created_at", { ascending: false })
-      .limit(20),
+      .limit(Math.max(maxCompactionSummaries * 3, 12)),
     options.supabase
       .from("messages")
       .select("role, content, metadata, created_at")
@@ -45,10 +54,27 @@ export async function assembleConversationContext(options: {
   const summaryRows = (summaryResult.data as unknown as ContextRow[] | null) || [];
   const recentRows = (recentResult.data as unknown as ContextRow[] | null) || [];
 
-  const summaries = summaryRows.filter(
+  const summariesDescending = summaryRows.filter(
     (message) => ((message.metadata || {}) as MessageMetadata).type === "compaction",
   );
-  const latestSummary = summaries.length ? summaries[0].content : null;
+  const selectedSummariesDescending: ContextRow[] = [];
+  let summaryTokens = 0;
+
+  for (const summary of summariesDescending) {
+    if (selectedSummariesDescending.length >= maxCompactionSummaries) {
+      break;
+    }
+
+    const nextTokens = estimateTokens(summary.content);
+    if (summaryTokens + nextTokens > summaryTokenBudget) {
+      continue;
+    }
+
+    selectedSummariesDescending.push(summary);
+    summaryTokens += nextTokens;
+  }
+
+  const layeredSummaries = selectedSummariesDescending.reverse();
 
   const rawMessages = recentRows.filter((message) => {
     const metadata = (message.metadata || {}) as MessageMetadata;
@@ -61,9 +87,15 @@ export async function assembleConversationContext(options: {
   const selected: LLMMessage[] = [];
   let usedTokens = 0;
 
-  if (latestSummary) {
-    selected.push({ role: "system", content: `Conversation summary: ${latestSummary}` });
-    usedTokens += estimateTokens(latestSummary);
+  for (const [index, summary] of layeredSummaries.entries()) {
+    selected.push({
+      role: "system",
+      content:
+        layeredSummaries.length > 1
+          ? `Conversation summary ${index + 1}/${layeredSummaries.length}: ${summary.content}`
+          : `Conversation summary: ${summary.content}`,
+    });
+    usedTokens += estimateTokens(summary.content);
   }
 
   // Keep the newest history that fits the budget.
