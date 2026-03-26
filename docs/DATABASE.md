@@ -9,6 +9,7 @@ Current migration chain:
 - `002_add_user_permissions.sql`
 - `004_agent_and_telegram.sql`
 - `005_agent_runs.sql`
+- `006_background_jobs.sql`
 
 ## Entity Relationship Diagram
 
@@ -22,9 +23,10 @@ users ────────────────┬───────�
                 conversations    user_memories   scheduled_tasks    integrations
                       │
                       ▼
-                   messages
-                      │
-                      └──────────────────────────────▶ agent_runs
+                   messages ────────────────┬─────────────────────────▶ agent_runs
+                      ▲                     │
+                      │                     ▼
+                      └──────────── background_jobs ───────────────▶ background_job_events
 
 users ───────────────────────────────────────────────▶ telegram_link_tokens
 ```
@@ -102,6 +104,11 @@ Common `metadata` fields:
 {
   "source": "web",
   "runId": "uuid",
+  "backgroundJob": {
+    "id": "uuid",
+    "status": "queued",
+    "pending": true
+  },
   "thinking": "...",
   "cards": [],
   "confirmation": {
@@ -117,6 +124,7 @@ Common `metadata` fields:
 
 Notes:
 - assistant messages may persist `gatewayError` when the run completes with a surfaced agent/runtime failure
+- assistant messages for queued long-form jobs persist `backgroundJob` state so the chat UI can resume polling after reload
 - plan/delegation progress is streamed live to the UI but not stored as first-class relational rows
 
 ### integrations
@@ -211,6 +219,51 @@ Notes:
 - `tool_calls` is a compact per-run summary, not a full event log
 - full streaming trace state remains ephemeral in the live chat UI
 
+### background_jobs
+
+Queue rows for long-form requests that should not complete inside the original `/api/chat` request.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | uuid | Primary key |
+| user_id | uuid | Owner |
+| conversation_id | uuid | Related conversation |
+| user_message_id | uuid | Existing user message row |
+| assistant_message_id | uuid | Placeholder/final assistant message row |
+| source | text | `web`, `telegram`, or `scheduled` |
+| request_text | text | Original request text |
+| status | text | `queued`, `running`, `completed`, `failed`, or `timeout` |
+| processing_token | text | Optional claim token for post-response kickoff |
+| attempts | integer | Processing attempt count |
+| started_at | timestamptz | Processing start time, nullable |
+| finished_at | timestamptz | Processing end time, nullable |
+| last_error | text | Final error text, nullable |
+| created_at | timestamptz | Creation time |
+| updated_at | timestamptz | Last update time |
+
+Usage notes:
+- created by `/api/chat` when `isLongJobMessage()` classifies a request as long-form
+- linked directly to the existing conversation/message rows so the final response appears in the same chat thread
+- picked up either by the immediate `/api/background-jobs/[id]/run` trigger or by `/api/cron`
+
+### background_job_events
+
+Persisted event stream for queued background jobs.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | uuid | Primary key |
+| job_id | uuid | Parent background job |
+| user_id | uuid | Owner |
+| seq | integer | Monotonic per-job event sequence |
+| event | jsonb | Serialized `AgentEvent` payload |
+| created_at | timestamptz | Creation time |
+
+Usage notes:
+- stores the pollable event stream for long-form jobs
+- powers `/api/background-jobs/[id]` so the chat UI can replay tool/progress updates after the original request finishes
+- complements `agent_runs`; it does not replace run-level telemetry
+
 ## RLS Model
 
 User-owned tables enforce `auth.uid() = user_id` semantics:
@@ -222,6 +275,8 @@ User-owned tables enforce `auth.uid() = user_id` semantics:
 - `scheduled_tasks`
 - `telegram_link_tokens`
 - `agent_runs`
+- `background_jobs`
+- `background_job_events`
 
 Webhook/cron flows use the service-role client where necessary.
 
@@ -240,10 +295,14 @@ CREATE INDEX idx_scheduled_tasks_run_at ON scheduled_tasks(run_at) WHERE enabled
 CREATE UNIQUE INDEX idx_telegram_link_tokens_token ON telegram_link_tokens(token);
 CREATE INDEX idx_agent_runs_user ON agent_runs(user_id, started_at DESC);
 CREATE INDEX idx_agent_runs_status ON agent_runs(user_id, status) WHERE status = 'running';
+CREATE INDEX idx_background_jobs_user_created ON background_jobs(user_id, created_at DESC);
+CREATE INDEX idx_background_jobs_queue ON background_jobs(status, created_at ASC) WHERE status in ('queued', 'running');
+CREATE INDEX idx_background_job_events_job_seq ON background_job_events(job_id, seq ASC);
 ```
 
 ## Notes
 
-- Planning state and delegation trace state are ephemeral runtime constructs; they are not stored as first-class database tables.
+- Planning state and delegation trace state are still ephemeral runtime constructs; they are not stored as first-class relational tables.
+- Long-form background-job progress is persisted, but only as a replay/event log in `background_job_events`, not as normalized tool/plan tables.
 - Settings memory and Dashboard memory are both CRUD surfaces over `user_memories`; there is not a second agent-only memory table.
 - The TypeScript source of truth for runtime/database shapes is [src/lib/types/database.ts](/Users/james/Projects/Coding/hada/src/lib/types/database.ts).

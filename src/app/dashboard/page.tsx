@@ -242,6 +242,14 @@ export default function DashboardPage() {
   const activityRuns = useMemo(() => activity.data.runs || [], [activity.data.runs]);
   const totalRuns = activity.data.total ?? activityRuns.length;
   const dashboardSummary = useMemo(() => buildSummary(activityRuns, analytics.data), [activityRuns, analytics.data]);
+  const dailyActivity = useMemo(
+    () => (analytics.data?.dailyActivity?.length ? analytics.data.dailyActivity : dashboardSummary.dailyActivity),
+    [analytics.data?.dailyActivity, dashboardSummary.dailyActivity],
+  );
+  const maxDailyActivityRuns = useMemo(
+    () => Math.max(1, ...dailyActivity.map((day) => day.runs ?? 0)),
+    [dailyActivity],
+  );
   const filteredMemories = useMemo(
     () =>
       memories.data.filter((memory) => {
@@ -514,14 +522,18 @@ export default function DashboardPage() {
                     <p className="text-xs text-zinc-400">Last 7 days</p>
                   </div>
                   <div className="grid h-44 grid-cols-7 items-end gap-2">
-                    {(analytics.data?.dailyActivity?.length ? analytics.data.dailyActivity : dashboardSummary.dailyActivity).map((day) => {
+                    {dailyActivity.map((day) => {
                       const runs = day.runs ?? 0;
+                      const heightPercent =
+                        runs > 0
+                          ? Math.max(12, Math.min(100, (runs / maxDailyActivityRuns) * 100))
+                          : 6;
                       return (
                         <div key={day.date || day.dateLabel} className="flex h-full flex-col items-center justify-end gap-2">
                           <div className="flex w-full flex-1 items-end">
                             <div
                               className="w-full rounded-t-xl bg-gradient-to-t from-teal-500 to-cyan-400"
-                              style={{ height: `${Math.max(12, runs * 12)}%` }}
+                              style={{ height: `${heightPercent}%` }}
                             />
                           </div>
                           <span className="text-[10px] text-zinc-400">{day.dateLabel || formatDayLabel(day.date || "")}</span>

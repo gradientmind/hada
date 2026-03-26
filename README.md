@@ -1,6 +1,6 @@
 # Hada
 
-Hada is an assistant application built around a local agent loop. It supports web chat, Telegram, long-term memory, scheduled tasks, live trace streaming, multi-step planning, specialist sub-agent delegation, a settings surface, and a dashboard control plane.
+Hada is an assistant application built around a local agent loop. It supports web chat, Telegram, long-term memory, scheduled tasks, live trace streaming, multi-step planning, specialist sub-agent delegation, background research jobs for long requests, a settings surface, and a dashboard control plane.
 
 ## Stack
 
@@ -16,6 +16,7 @@ Hada is an assistant application built around a local agent loop. It supports we
 - Persistent per-user conversation history
 - Inline chat execution traces with tool calls, reasoning, and latencies
 - Progress-aware timeout handling with larger budgets for long-form research/memo jobs
+- Background execution for long-form research/memo jobs, with persisted progress events and chat polling
 - Multi-step task planning via `plan_task`
 - Specialist delegation via `delegate_task`
 - Long-term memory via `user_memories`
@@ -86,6 +87,7 @@ Run these migrations in Supabase SQL Editor:
 - `supabase/migrations/002_add_user_permissions.sql`
 - `supabase/migrations/004_agent_and_telegram.sql`
 - `supabase/migrations/005_agent_runs.sql`
+- `supabase/migrations/006_background_jobs.sql`
 
 ### Run locally
 
@@ -108,6 +110,8 @@ npm run build
 ## Important Paths
 
 - `src/app/api/chat/route.ts` - web chat SSE API
+- `src/app/api/background-jobs/[id]/route.ts` - background job poll API
+- `src/app/api/background-jobs/[id]/run/route.ts` - background job processor trigger
 - `src/app/api/tools/route.ts` - tool manifest introspection
 - `src/app/api/dashboard/` - dashboard APIs
 - `src/app/api/webhooks/telegram/route.ts` - Telegram webhook
@@ -116,6 +120,8 @@ npm run build
 - `src/app/dashboard/page.tsx` - dashboard UI
 - `src/lib/chat/agent-loop.ts` - core runtime loop
 - `src/lib/chat/process-message.ts` - orchestration + telemetry
+- `src/lib/chat/runtime-budgets.ts` - normal vs long-job budget selection
+- `src/lib/background-jobs.ts` - queueing, processing, and polling helpers
 - `src/lib/chat/tools/` - tool implementations
 - `src/lib/chat/agents/` - sub-agent profiles
 - `src/components/chat/agent-trace.tsx` - trace/delegation UI
@@ -127,6 +133,7 @@ npm run build
 ## Notes
 
 - The Settings memory tab and the Dashboard memory manager both operate on the same `user_memories` table the agent uses during runtime.
-- `/api/chat` is an SSE endpoint with a long request budget; normal runs and long-form runs use different timeout budgets internally.
+- `/api/chat` is an SSE endpoint with `maxDuration = 300`; long research-style prompts are queued into background jobs instead of trying to complete inside one request.
+- Background job progress is persisted in `background_job_events` and replayed into chat by polling `/api/background-jobs/[id]`.
 - Dashboard task `Run now` is intentionally guarded until immediate execution is wired through the scheduler path.
 - Next.js currently emits a `middleware` → `proxy` deprecation warning during build; the app still builds successfully.

@@ -42,8 +42,46 @@ export async function POST(request: NextRequest) {
         }
       };
 
+      const runDirectly = () => {
+        processMessage({
+          userId: user.id,
+          message,
+          source: "web",
+          supabase,
+          onEvent: (event: AgentEvent) => {
+            emit(event);
+          },
+        })
+          .then((result) => {
+            emit({
+              type: "complete",
+              id: result.assistantMessageId,
+              conversationId: result.conversationId,
+              userMessageId: result.userMessageId,
+              isError: !!result.metadata.gatewayError,
+              errorMessage: result.metadata.gatewayError?.message,
+            });
+          })
+          .catch((error: unknown) => {
+            emit({
+              type: "error",
+              message:
+                error instanceof Error ? error.message : "Internal server error",
+            });
+          })
+          .finally(() => {
+            try {
+              controller.close();
+            } catch {
+              // Already closed.
+            }
+          });
+      };
+
       if (isLongJobMessage(message)) {
         void (async () => {
+          let fellBackToDirectRun = false;
+
           try {
             const queued = await enqueueBackgroundJob({
               supabase,
@@ -67,12 +105,23 @@ export async function POST(request: NextRequest) {
               assistantMessageId: queued.assistantMessageId,
             });
           } catch (error) {
+            if (shouldFallbackToDirectRun(error)) {
+              fellBackToDirectRun = true;
+              console.warn("Background job tables unavailable; falling back to direct chat run.", error);
+              runDirectly();
+              return;
+            }
+
             emit({
               type: "error",
               message:
                 error instanceof Error ? error.message : "Failed to queue background job.",
             });
           } finally {
+            if (fellBackToDirectRun) {
+              return;
+            }
+
             try {
               controller.close();
             } catch {
@@ -83,39 +132,7 @@ export async function POST(request: NextRequest) {
         return;
       }
 
-      processMessage({
-        userId: user.id,
-        message,
-        source: "web",
-        supabase,
-        onEvent: (event: AgentEvent) => {
-          emit(event);
-        },
-      })
-        .then((result) => {
-          emit({
-            type: "complete",
-            id: result.assistantMessageId,
-            conversationId: result.conversationId,
-            userMessageId: result.userMessageId,
-            isError: !!result.metadata.gatewayError,
-            errorMessage: result.metadata.gatewayError?.message,
-          });
-        })
-        .catch((error: unknown) => {
-          emit({
-            type: "error",
-            message:
-              error instanceof Error ? error.message : "Internal server error",
-          });
-        })
-        .finally(() => {
-          try {
-            controller.close();
-          } catch {
-            // Already closed.
-          }
-        });
+      runDirectly();
     },
   });
 
@@ -126,4 +143,20 @@ export async function POST(request: NextRequest) {
       "X-Accel-Buffering": "no",
     },
   });
+}
+
+function shouldFallbackToDirectRun(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  const message = error.message.toLowerCase();
+  return (
+    message.includes("background_jobs") &&
+    (
+      message.includes("schema cache") ||
+      message.includes("does not exist") ||
+      message.includes("could not find")
+    )
+  );
 }

@@ -1139,7 +1139,7 @@ export default function ChatPage() {
                     </h1>
                     <p className="mt-2 max-w-md text-sm text-zinc-500 sm:text-lg">What can I help you with today?</p>
 
-                    <div className="mt-5 w-full max-w-2xl sm:mt-6">
+                    <div className="mt-5 w-full max-w-2xl sm:hidden">
                       {inputForm}
                     </div>
 
@@ -1209,6 +1209,10 @@ export default function ChatPage() {
                         </div>
                       </div>
                     ) : null}
+
+                    <div className="mt-8 hidden w-full max-w-2xl sm:block">
+                      {inputForm}
+                    </div>
                   </motion.div>
                 ) : (
                   <AnimatePresence>

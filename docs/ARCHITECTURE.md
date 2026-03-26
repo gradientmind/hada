@@ -22,7 +22,8 @@ Next.js App
   │   ├─ /dashboard
   │   └─ /settings
   ├─ API Routes
-  │   ├─ /api/chat              (SSE stream)
+  │   ├─ /api/chat              (SSE stream + background job enqueue)
+  │   ├─ /api/background-jobs/*
   │   ├─ /api/tools
   │   ├─ /api/dashboard/*
   │   ├─ /api/webhooks/telegram
@@ -57,19 +58,31 @@ Storage / services
 ```text
 Chat UI
   → POST /api/chat
-  → long-lived request budget (`maxDuration = 600`)
-  → processMessage()
-  → run budget selection (normal vs long-form research)
-  → agentLoop()
-  → LLM + tools
-  → SSE events (text, tool, plan, delegation)
-  → UI updates inline
-  → final response + telemetry persisted
+  → request budget (`maxDuration = 300`)
+  → request classification
+     ├─ short/interactive
+     │   → processMessage()
+     │   → run budget selection
+     │   → agentLoop()
+     │   → LLM + tools
+     │   → SSE events (text, tool, plan, delegation)
+     │   → UI updates inline
+     │   → final response + telemetry persisted
+     └─ long-form research/memo
+         → enqueue background_jobs row
+         → create placeholder assistant message
+         → emit `background_job` SSE event
+         → post-response `/api/background-jobs/[id]/run`
+         → processMessage() in background
+         → persist background_job_events
+         → UI polls `/api/background-jobs/[id]`
+         → final assistant message updated in place
 ```
 
 Key properties:
 - `/api/chat` returns an SSE stream, not a single JSON blob.
-- The frontend updates assistant text, trace cards, task plans, and delegated sub-agent groups in real time.
+- The frontend updates assistant text, trace cards, task plans, and delegated sub-agent groups in real time for direct runs.
+- Long-form research jobs move out of the request path but still surface progress through persisted events and polling.
 - The final assistant message and `agent_runs` telemetry are saved after the loop completes.
 
 ### Telegram Flow
@@ -91,6 +104,7 @@ Telegram reuses the same orchestration path as web chat, but adapts output throu
 Cron trigger
   → /api/cron
   → scheduled task lookup
+  → queued background job pickup
   → processMessage(source="scheduled")
   → shared conversation + downstream delivery
 ```
@@ -101,13 +115,13 @@ Cron trigger
 
 `src/lib/chat/process-message.ts` is the orchestration entry point. It is responsible for:
 - creating/finding the user conversation
-- saving the user message
+- saving or reusing the user message
 - resolving integrations and tool availability
 - building the system prompt
 - selecting the provider/model
 - selecting runtime budgets based on the request shape
 - running `agentLoop()`
-- persisting the assistant response
+- persisting or updating the assistant response
 - recording `agent_runs` telemetry
 
 ### `agentLoop()`
@@ -140,6 +154,11 @@ Current timeout policy:
 - long-form requests such as research/memo work receive a larger hard runtime budget
 - delegated specialist agents have their own profile-specific timeout budgets
 - active work is allowed to continue; stalled work is what times out quickly
+
+Current request/runtime split:
+- `/api/chat` stays within the Vercel Hobby `300s` serverless limit
+- normal interactive runs use direct SSE execution
+- long-form runs are queued via `background_jobs` and processed outside the originating chat request
 
 ## Orchestration Layers
 
@@ -183,6 +202,7 @@ Key UI elements:
 - `AgentTraceTimeline` for tool/reasoning execution
 - `TaskPlanCard` for plan progress
 - nested delegation trace groups for sub-agent work
+- background-job progress replay for queued long-form runs
 - responsive chat layout that keeps long links/code/tables viewable on narrow viewports
 
 ### Dashboard
@@ -194,6 +214,7 @@ Current sections:
 - tool analytics from `agent_runs.tool_calls`
 - memory browser/editor backed by `user_memories`
 - task manager backed by `scheduled_tasks`
+- mobile layout prioritizes active tab content ahead of large summary chrome
 
 ### Settings
 
@@ -204,6 +225,7 @@ Current sections:
 - integrations management
 - account preferences and conversation reset
 - memory management backed by the same `user_memories` table used by the agent loop
+- mobile layout uses a compact section switcher so the active pane is visible immediately
 
 ## Data Model
 
@@ -216,6 +238,8 @@ Primary persisted entities:
 - `scheduled_tasks`
 - `telegram_link_tokens`
 - `agent_runs`
+- `background_jobs`
+- `background_job_events`
 
 Important non-persisted orchestration state:
 - active task plans
@@ -273,6 +297,9 @@ There are two observability layers:
 - `agent_runs` records per-run status, duration, previews, tool calls, and errors
 - dashboard analytics aggregate this for recent activity and tool usage
 - timed-out runs distinguish between runtime failure and explicit timeout conditions via final run status/error text
+3. Persisted background-job events:
+- `background_jobs` tracks queued long-form work
+- `background_job_events` stores pollable progress events for replay into chat
 
 ## Scaling Notes
 
@@ -280,4 +307,4 @@ There are two observability layers:
 - Context compaction keeps prompt size bounded over time.
 - Telemetry and dashboard queries are indexed by user and time.
 - Delegation currently runs sequentially inside a parent tool call; it does not fan out sub-agents in parallel inside the app runtime.
-- Long-running work still executes inside the request path today; timeout budgets are intentionally generous for research-style tasks, but the architecture can later move these into a background job model if needed.
+- Long-running research-style work now uses a background-job path; truly short interactive work still runs inline inside the request.
