@@ -865,6 +865,19 @@ export default function ChatPage() {
                             {message.isStreaming && message.content && (
                               <span className="inline-block h-4 w-0.5 bg-zinc-400 animate-pulse ml-0.5" />
                             )}
+                            {message.isStreaming &&
+                            !message.content &&
+                            !message.traceEvents?.length &&
+                            !message.thinkingEvents?.length &&
+                            !message.plan ? (
+                              <div className="flex items-center gap-2 pt-1">
+                                <div className="bounce-dots">
+                                  <span />
+                                  <span />
+                                  <span />
+                                </div>
+                              </div>
+                            ) : null}
                           </div>
                           {/* Render calendar cards */}
                           {message.cards?.map((card, idx) => {
@@ -922,29 +935,6 @@ export default function ChatPage() {
                       </motion.div>
                     ))}
                   </AnimatePresence>
-                )}
-
-                {isLoading && isThinking && (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="flex gap-3"
-                  >
-                    <div className="h-8 w-8 shrink-0 rounded-full avatar-accent-ring">
-                      <Avatar className="h-full w-full">
-                        <AvatarFallback className="gradient-brand text-white text-xs font-bold">
-                          H
-                        </AvatarFallback>
-                      </Avatar>
-                    </div>
-                    <div className="flex items-center gap-2 pt-2">
-                      <div className="bounce-dots">
-                        <span />
-                        <span />
-                        <span />
-                      </div>
-                    </div>
-                  </motion.div>
                 )}
                 <div ref={endOfMessagesRef} />
               </div>
