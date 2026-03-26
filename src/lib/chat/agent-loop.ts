@@ -1,4 +1,4 @@
-import type { AgentEvent } from "@/lib/types/database";
+import type { AgentEvent, TaskPlan, TaskStep } from "@/lib/types/database";
 import {
   callLLM,
   type LLMMessage,
@@ -23,16 +23,22 @@ export interface AgentLoopOptions {
   provider: ProviderSelection;
   timeout?: number;
   maxErrors?: number;
+  maxIterations?: number;
 }
 
 const DEFAULT_TIMEOUT_MS = 60_000;
 const DEFAULT_MAX_ERRORS = 3;
 const TOOL_RESULT_LIMIT = 8_000;
+const PLAN_TASK_TOOL_NAME = "plan_task";
 
 export async function* agentLoop(options: AgentLoopOptions): AsyncGenerator<AgentEvent> {
   const startedAt = Date.now();
   const timeoutMs = options.timeout ?? DEFAULT_TIMEOUT_MS;
   const maxErrors = options.maxErrors ?? DEFAULT_MAX_ERRORS;
+  const maxIterations =
+    typeof options.maxIterations === "number" && options.maxIterations > 0
+      ? Math.trunc(options.maxIterations)
+      : null;
   const timeoutController = new AbortController();
   const timeoutHandle = setTimeout(() => {
     timeoutController.abort();
@@ -50,6 +56,11 @@ export async function* agentLoop(options: AgentLoopOptions): AsyncGenerator<Agen
 
   let consecutiveErrors = 0;
   let finalText = "";
+  let activePlan: TaskPlan | null = null;
+  let currentStepIndex = 0;
+  const completedStepTools = new Map<string, Set<string>>();
+  let iterationCount = 0;
+  let emptyResponseRecoveryAttempts = 0;
 
   try {
     while (true) {
@@ -59,14 +70,24 @@ export async function* agentLoop(options: AgentLoopOptions): AsyncGenerator<Agen
       }
 
       try {
+        if (maxIterations != null && iterationCount >= maxIterations) {
+          yield { type: "error", message: "Agent reached its iteration limit before finishing." };
+          return;
+        }
+
+        iterationCount += 1;
         const result = await callLLMWithRetry({
           selection: options.provider,
-          messages: llmMessages,
+          messages: buildMessagesForIteration(llmMessages, activePlan, currentStepIndex),
           tools: llmTools,
           signal: timeoutController.signal,
         });
 
         const rawContent = result.content || "";
+        const thinkingContent = extractThinkingContent(rawContent);
+        if (thinkingContent) {
+          yield { type: "thinking", content: thinkingContent };
+        }
         const visibleContent = sanitizeAssistantContent(rawContent);
         const fallbackToolCalls =
           result.toolCalls.length === 0 ? parseProtocolToolCalls(rawContent) : [];
@@ -74,6 +95,23 @@ export async function* agentLoop(options: AgentLoopOptions): AsyncGenerator<Agen
           result.toolCalls.length > 0 ? result.toolCalls : fallbackToolCalls;
 
         if (!effectiveToolCalls.length) {
+          if (!visibleContent.trim()) {
+            if (emptyResponseRecoveryAttempts < 1) {
+              emptyResponseRecoveryAttempts += 1;
+              llmMessages.push({
+                role: "system",
+                content:
+                  "Your previous turn did not contain any user-visible answer. " +
+                  "Respond to the user now with a concise final message in plain markdown. " +
+                  "Do not omit the final answer. Only call another tool if a required result is still missing.",
+              });
+              continue;
+            }
+
+            yield { type: "error", message: "Agent returned an empty response after processing the request." };
+            return;
+          }
+
           if (visibleContent) {
             finalText += visibleContent;
             for (const chunk of chunkText(visibleContent, 140)) {
@@ -84,6 +122,8 @@ export async function* agentLoop(options: AgentLoopOptions): AsyncGenerator<Agen
           yield { type: "done", content: finalText.trim() };
           return;
         }
+
+        emptyResponseRecoveryAttempts = 0;
 
         llmMessages.push({
           role: "assistant",
@@ -99,19 +139,84 @@ export async function* agentLoop(options: AgentLoopOptions): AsyncGenerator<Agen
         });
 
         for (const call of effectiveToolCalls) {
-          yield { type: "tool_call", name: call.name, args: call.arguments };
+          const callId = call.id;
+          const matchedStep =
+            call.name === PLAN_TASK_TOOL_NAME
+              ? null
+              : findStepForToolCall(activePlan, currentStepIndex, call.name);
+
+          if (activePlan && matchedStep) {
+            const matchedIndex = activePlan.steps.findIndex((step) => step.id === matchedStep.id);
+            if (matchedIndex >= 0) {
+              currentStepIndex = matchedIndex;
+            }
+
+            if (matchedStep.status !== "running") {
+              matchedStep.status = "running";
+              yield { type: "step_started", stepId: matchedStep.id, planId: activePlan.id };
+            }
+          }
+
+          yield { type: "tool_call", name: call.name, args: call.arguments, callId };
 
           const tool = toolMap.get(call.name);
+          const toolStart = Date.now();
           const toolResult = await runTool(tool, call.arguments, timeoutController.signal);
+          const durationMs = Date.now() - toolStart;
           const sanitized = sanitizeToolResult(toolResult);
+          const truncated = toolResult.trim().length > TOOL_RESULT_LIMIT;
 
-          yield { type: "tool_result", name: call.name, result: sanitized };
+          yield { type: "tool_result", name: call.name, result: sanitized, callId, durationMs, truncated };
           llmMessages.push({
             role: "tool",
             name: call.name,
             tool_call_id: call.id,
             content: sanitized,
           });
+
+          if (call.name === PLAN_TASK_TOOL_NAME) {
+            const parsedPlan = parseTaskPlanResult(toolResult);
+            if (parsedPlan) {
+              activePlan = parsedPlan;
+              currentStepIndex = findNextOpenStepIndex(parsedPlan);
+              completedStepTools.clear();
+              yield { type: "plan_created", plan: clonePlan(parsedPlan) };
+            }
+            continue;
+          }
+
+          if (!activePlan || !matchedStep) {
+            continue;
+          }
+
+          if (didToolFail(toolResult)) {
+            matchedStep.status = "failed";
+            yield {
+              type: "step_failed",
+              stepId: matchedStep.id,
+              planId: activePlan.id,
+              error: sanitized,
+            };
+            continue;
+          }
+
+          markStepToolCompleted(completedStepTools, matchedStep, call.name);
+          if (isStepComplete(matchedStep, completedStepTools)) {
+            matchedStep.status = "done";
+            yield {
+              type: "step_completed",
+              stepId: matchedStep.id,
+              planId: activePlan.id,
+              result: sanitized,
+            };
+
+            currentStepIndex = findNextOpenStepIndex(activePlan, currentStepIndex + 1);
+            if (activePlan.steps.every((step) => step.status === "done")) {
+              activePlan = null;
+              currentStepIndex = 0;
+              completedStepTools.clear();
+            }
+          }
         }
 
         consecutiveErrors = 0;
@@ -141,6 +246,208 @@ export async function* agentLoop(options: AgentLoopOptions): AsyncGenerator<Agen
   } finally {
     clearTimeout(timeoutHandle);
   }
+}
+
+function buildMessagesForIteration(
+  llmMessages: LLMMessage[],
+  activePlan: TaskPlan | null,
+  currentStepIndex: number,
+): LLMMessage[] {
+  if (!activePlan) {
+    return llmMessages;
+  }
+
+  const currentStep =
+    activePlan.steps[currentStepIndex] ??
+    activePlan.steps.find((step) => step.status === "running" || step.status === "pending");
+
+  if (!currentStep) {
+    return llmMessages;
+  }
+
+  return [
+    ...llmMessages,
+    {
+      role: "system",
+      content: buildPlanExecutionPrompt(activePlan, currentStep),
+    },
+  ];
+}
+
+function buildPlanExecutionPrompt(plan: TaskPlan, currentStep: TaskStep): string {
+  const remaining = plan.steps
+    .filter((step) => step.status !== "done")
+    .map((step, index) => {
+      const toolText = step.toolsNeeded?.length
+        ? ` Tools: ${step.toolsNeeded.join(", ")}.`
+        : "";
+      return `${index + 1}. [${step.status}] ${step.title}: ${step.description}.${toolText}`;
+    })
+    .join("\n");
+
+  return [
+    "You are currently executing a multi-step plan.",
+    plan.goal ? `Goal: ${plan.goal}` : null,
+    `Current step: ${currentStep.title}`,
+    currentStep.toolsNeeded?.length
+      ? `Expected tools for this step: ${currentStep.toolsNeeded.join(", ")}`
+      : "Advance the current step with the next useful tool call.",
+    remaining ? `Open steps:\n${remaining}` : null,
+    "Proceed with the next action for the current step before moving on.",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function parseTaskPlanResult(result: string): TaskPlan | null {
+  try {
+    const parsed = JSON.parse(result) as Partial<TaskPlan> & { goal?: unknown; steps?: unknown };
+    if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.steps)) {
+      return null;
+    }
+
+    const steps = parsed.steps
+      .map((step) => normalizeTaskStep(step))
+      .filter((step): step is TaskStep => Boolean(step));
+
+    if (!steps.length) {
+      return null;
+    }
+
+    return {
+      id: typeof parsed.id === "string" && parsed.id.trim() ? parsed.id : crypto.randomUUID(),
+      goal: typeof parsed.goal === "string" ? parsed.goal : undefined,
+      steps,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function normalizeTaskStep(step: unknown): TaskStep | null {
+  if (!step || typeof step !== "object") {
+    return null;
+  }
+
+  const record = step as Record<string, unknown>;
+  const title = typeof record.title === "string" ? record.title.trim() : "";
+  const description = typeof record.description === "string" ? record.description.trim() : "";
+  if (!title || !description) {
+    return null;
+  }
+
+  const status =
+    record.status === "running" ||
+    record.status === "done" ||
+    record.status === "failed" ||
+    record.status === "pending"
+      ? record.status
+      : "pending";
+  const toolsNeeded = Array.isArray(record.toolsNeeded)
+    ? record.toolsNeeded
+        .filter((tool): tool is string => typeof tool === "string")
+        .map((tool) => tool.trim())
+        .filter(Boolean)
+    : undefined;
+
+  return {
+    id: typeof record.id === "string" && record.id.trim() ? record.id : crypto.randomUUID(),
+    title,
+    description,
+    status,
+    ...(toolsNeeded?.length ? { toolsNeeded } : {}),
+  };
+}
+
+function findStepForToolCall(
+  activePlan: TaskPlan | null,
+  currentStepIndex: number,
+  toolName: string,
+): TaskStep | null {
+  if (!activePlan) {
+    return null;
+  }
+
+  const orderedSteps = [
+    ...activePlan.steps.slice(currentStepIndex),
+    ...activePlan.steps.slice(0, currentStepIndex),
+  ].filter(isOpenStep);
+  const matchedByTool = orderedSteps.find((step) => step.toolsNeeded?.includes(toolName));
+  if (matchedByTool) {
+    return matchedByTool;
+  }
+
+  return orderedSteps.find((step) => !step.toolsNeeded?.length) || null;
+}
+
+function isOpenStep(step: TaskStep): boolean {
+  return step.status === "pending" || step.status === "running" || step.status === "failed";
+}
+
+function markStepToolCompleted(
+  stepTools: Map<string, Set<string>>,
+  step: TaskStep,
+  toolName: string,
+): void {
+  const tools = stepTools.get(step.id) || new Set<string>();
+  tools.add(toolName);
+  stepTools.set(step.id, tools);
+}
+
+function isStepComplete(
+  step: TaskStep,
+  stepTools: Map<string, Set<string>>,
+): boolean {
+  if (!step.toolsNeeded?.length) {
+    return true;
+  }
+
+  const executed = stepTools.get(step.id);
+  if (!executed) {
+    return false;
+  }
+
+  return step.toolsNeeded.every((tool) => executed.has(tool));
+}
+
+function findNextOpenStepIndex(plan: TaskPlan, startAt = 0): number {
+  const nextIndex = plan.steps.findIndex(
+    (step, index) => index >= startAt && step.status !== "done",
+  );
+  if (nextIndex >= 0) {
+    return nextIndex;
+  }
+
+  return plan.steps.findIndex((step) => step.status !== "done");
+}
+
+function didToolFail(result: string): boolean {
+  const trimmed = result.trim();
+  if (!trimmed) {
+    return false;
+  }
+
+  if (trimmed === "Tool not found." || trimmed.startsWith("Tool error:")) {
+    return true;
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed) as { success?: unknown; error?: unknown };
+    return parsed.success === false || typeof parsed.error === "string";
+  } catch {
+    return false;
+  }
+}
+
+function clonePlan(plan: TaskPlan): TaskPlan {
+  return {
+    id: plan.id,
+    goal: plan.goal,
+    steps: plan.steps.map((step) => ({
+      ...step,
+      ...(step.toolsNeeded ? { toolsNeeded: [...step.toolsNeeded] } : {}),
+    })),
+  };
 }
 
 function parseProtocolToolCalls(
@@ -385,6 +692,12 @@ function chunkText(text: string, maxChunkSize: number): string[] {
     start += maxChunkSize;
   }
   return chunks;
+}
+
+function extractThinkingContent(text: string): string | null {
+  if (!text) return null;
+  const match = text.match(/<think>([\s\S]*?)<\/think>/i);
+  return match?.[1]?.trim() || null;
 }
 
 function sanitizeAssistantContent(text: string): string {

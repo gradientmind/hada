@@ -2,217 +2,216 @@
 
 ## Overview
 
-Hada uses PostgreSQL via Supabase. All tables have Row Level Security (RLS) enabled, ensuring users can only access their own data.
+Hada uses PostgreSQL via Supabase. Application data is stored in `public.*` tables, while authentication is handled by Supabase in `auth.users`. Row Level Security (RLS) is enabled on user-owned tables so users only access their own data.
+
+Current migration chain:
+- `001_initial_schema.sql`
+- `002_add_user_permissions.sql`
+- `004_agent_and_telegram.sql`
+- `005_agent_runs.sql`
 
 ## Entity Relationship Diagram
 
-```
-┌──────────────────┐
-│   auth.users     │  (Supabase managed)
-│──────────────────│
-│ id               │
-│ email            │
-│ created_at       │
-└────────┬─────────┘
-         │
-         │ 1:1 (auto-created via trigger)
-         ▼
-┌──────────────────┐       ┌──────────────────┐
-│     users        │       │   integrations   │
-│──────────────────│       │──────────────────│
-│ id (FK)          │◄──────│ user_id (FK)     │
-│ email            │  1:N  │ provider         │
-│ name             │       │ access_token     │
-│ avatar_url       │       │ refresh_token    │
-│ tier             │       │ expires_at       │
-│ settings (jsonb) │       │ scopes           │
-│ created_at       │       └──────────────────┘
-│ updated_at       │
-└────────┬─────────┘
-         │
-         ├──── 1:N ──────────────────────────────┐
-         │                                        │
-         ▼                                        ▼
-┌──────────────────┐       ┌──────────────────┐  ┌──────────────────────┐
-│  conversations   │       │  user_memories   │  │  scheduled_tasks     │
-│──────────────────│       │──────────────────│  │──────────────────────│
-│ id               │       │ id               │  │ id                   │
-│ user_id (FK)     │       │ user_id (FK)     │  │ user_id (FK)         │
-│ title            │       │ topic            │  │ type                 │
-│ compacted_through│       │ content          │  │ cron_expression      │
-│ created_at       │       │ created_at       │  │ run_at               │
-│ updated_at       │       │ updated_at       │  │ description          │
-└────────┬─────────┘       └──────────────────┘  │ enabled              │
-         │                                        │ last_run_at          │
-         │ 1:N                                    └──────────────────────┘
-         ▼
-┌──────────────────┐       ┌──────────────────────┐
-│    messages      │       │ telegram_link_tokens │
-│──────────────────│       │──────────────────────│
-│ id               │       │ id                   │
-│ conversation_id  │       │ user_id (FK)         │
-│ role             │       │ token                │
-│ content          │       │ expires_at           │
-│ metadata         │       │ created_at           │
-│ created_at       │       └──────────────────────┘
-└──────────────────┘
+```text
+auth.users
+    │ 1:1
+    ▼
+users ────────────────┬───────────────┬───────────────┬──────────────────┐
+                      │               │               │                  │
+                      ▼               ▼               ▼                  ▼
+                conversations    user_memories   scheduled_tasks    integrations
+                      │
+                      ▼
+                   messages
+                      │
+                      └──────────────────────────────▶ agent_runs
+
+users ───────────────────────────────────────────────▶ telegram_link_tokens
 ```
 
 ## Tables
 
 ### users
 
-Extends Supabase auth.users with application-specific data.
+Extends `auth.users` with application-specific profile, permission, and model settings.
 
 | Column | Type | Description |
 |--------|------|-------------|
-| id | uuid | Primary key, references auth.users |
-| email | text | User's email address |
-| name | text | Display name (nullable) |
-| avatar_url | text | Profile picture URL (nullable) |
-| tier | text | Subscription tier: 'free', 'paid', 'pro' |
-| settings | jsonb | User preferences (nullable) |
-| created_at | timestamptz | Account creation time |
+| id | uuid | Primary key, references `auth.users.id` |
+| email | text | User email |
+| name | text | Display name, nullable |
+| avatar_url | text | Avatar URL, nullable |
+| tier | text | `free`, `paid`, or `pro` |
+| permissions | jsonb | Tool/action permission modes |
+| settings | jsonb | User runtime preferences |
+| created_at | timestamptz | Creation time |
 | updated_at | timestamptz | Last profile update |
 
-**Settings JSONB structure:**
+Example `settings` payload:
+
 ```json
 {
-  "llm": {
-    "provider": "minimax",
-    "model": "MiniMax-M2.1"
-  },
+  "llm_provider": "minimax",
+  "llm_model": "MiniMax-M2.1",
   "timezone": "America/New_York"
 }
 ```
 
-**RLS Policies:**
-- Users can view their own profile
-- Users can update their own profile
+Example `permissions` payload:
+
+```json
+{
+  "google_calendar_read": "direct",
+  "google_calendar_write": "confirm"
+}
+```
 
 ### conversations
 
-Chat threads between user and assistant. Each user has one conversation (unified across channels).
+Unified chat threads. Each user currently uses one active conversation across web, Telegram, and scheduled runs.
 
 | Column | Type | Description |
 |--------|------|-------------|
 | id | uuid | Primary key |
-| user_id | uuid | Owner of conversation |
-| title | text | Auto-generated or user-set title (nullable) |
-| compacted_through | timestamptz | Messages before this are compacted (nullable) |
-| created_at | timestamptz | Thread creation time |
-| updated_at | timestamptz | Last message time |
-
-**RLS Policies:**
-- Users can CRUD their own conversations
+| user_id | uuid | Owner |
+| title | text | Optional title |
+| compacted_through | timestamptz | Messages before this point have been compacted |
+| created_at | timestamptz | Creation time |
+| updated_at | timestamptz | Last update time |
 
 ### messages
 
-Individual messages within conversations.
+Persisted user/assistant/system messages within a conversation.
 
 | Column | Type | Description |
 |--------|------|-------------|
 | id | uuid | Primary key |
 | conversation_id | uuid | Parent conversation |
-| role | text | 'user', 'assistant', or 'system' |
-| content | text | Message text |
-| metadata | jsonb | Additional data (nullable) |
-| created_at | timestamptz | Message timestamp |
+| role | text | `user`, `assistant`, or `system` |
+| content | text | Message body |
+| metadata | jsonb | Message metadata |
+| created_at | timestamptz | Creation time |
 
-**Metadata structure:**
+Common `metadata` fields:
+
 ```json
 {
-  "source": "web | telegram | scheduled",
+  "source": "web",
+  "runId": "uuid",
   "thinking": "...",
-  "cards": [...],
-  "confirmation": {...},
+  "cards": [],
+  "confirmation": {
+    "pending": true
+  },
+  "gatewayError": {
+    "code": "AGENT_ERROR",
+    "message": "..."
+  },
   "type": "compaction"
 }
 ```
 
-**RLS Policies:**
-- Users can view/create messages in their own conversations
-
 ### integrations
 
-OAuth tokens and channel connections for third-party services.
+OAuth/channel credentials for external providers.
 
 | Column | Type | Description |
 |--------|------|-------------|
 | id | uuid | Primary key |
-| user_id | uuid | Token owner |
-| provider | text | 'google', 'telegram', 'microsoft' |
-| access_token | text | OAuth access token (or Telegram chat_id) |
-| refresh_token | text | OAuth refresh token (nullable) |
-| expires_at | timestamptz | Token expiration |
-| scopes | text[] | Granted OAuth scopes |
-| created_at | timestamptz | Connection time |
-| updated_at | timestamptz | Last token refresh |
-
-**RLS Policies:**
-- Users can CRUD their own integrations
+| user_id | uuid | Owner |
+| provider | text | `google`, `microsoft`, or `telegram` |
+| access_token | text | Provider credential |
+| refresh_token | text | Refresh token, nullable |
+| expires_at | timestamptz | Expiration time, nullable |
+| scopes | text[] | Granted scopes |
+| created_at | timestamptz | Creation time |
+| updated_at | timestamptz | Last refresh/update |
 
 ### user_memories
 
-Long-term memory for the AI assistant, keyed by topic.
+Long-term memory entries keyed by topic.
 
 | Column | Type | Description |
 |--------|------|-------------|
 | id | uuid | Primary key |
-| user_id | uuid | Memory owner |
-| topic | text | Memory topic (e.g. "preferences", "work") |
-| content | text | Memory content |
+| user_id | uuid | Owner |
+| topic | text | Stable memory key |
+| content | text | Stored memory content |
 | created_at | timestamptz | Creation time |
 | updated_at | timestamptz | Last update time |
 
-**Constraints:**
-- Unique index on `(user_id, topic)` — one entry per topic per user
-
-**RLS Policies:**
-- Users can CRUD their own memories
+Constraint:
+- unique index on `(user_id, topic)`
 
 ### scheduled_tasks
 
-One-time and recurring tasks created by the assistant.
+Assistant-created once or recurring tasks.
 
 | Column | Type | Description |
 |--------|------|-------------|
 | id | uuid | Primary key |
-| user_id | uuid | Task owner |
-| type | text | 'once' or 'recurring' |
-| cron_expression | text | For recurring: cron format (nullable) |
-| run_at | timestamptz | For one-time: when to run (nullable) |
-| description | text | What the agent should do |
-| enabled | boolean | Whether task is active (default true) |
-| last_run_at | timestamptz | Last execution time (nullable) |
+| user_id | uuid | Owner |
+| type | text | `once` or `recurring` |
+| cron_expression | text | Cron string for recurring tasks, nullable |
+| run_at | timestamptz | One-time execution timestamp, nullable |
+| description | text | Task description |
+| enabled | boolean | Whether the task is active |
+| last_run_at | timestamptz | Last execution timestamp, nullable |
 | created_at | timestamptz | Creation time |
-
-**RLS Policies:**
-- Users can CRUD their own tasks
 
 ### telegram_link_tokens
 
-Temporary tokens for linking Telegram accounts. Short-lived (10 min TTL).
+Short-lived tokens used to link Telegram accounts.
 
 | Column | Type | Description |
 |--------|------|-------------|
 | id | uuid | Primary key |
-| user_id | uuid | User requesting link |
-| token | text | Unique link token |
-| expires_at | timestamptz | Token expiration (10 min) |
+| user_id | uuid | Owner |
+| token | text | Link token |
+| expires_at | timestamptz | Expiration timestamp |
+| used_at | timestamptz | Consumption timestamp, nullable |
 | created_at | timestamptz | Creation time |
 
-**Constraints:**
-- Unique index on `token`
+### agent_runs
 
-**RLS Policies:**
-- Users can create tokens for themselves
-- Cleaned up periodically or consumed on use
+Run-level telemetry for each agent execution. This powers the dashboard activity feed and analytics.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | uuid | Primary key |
+| user_id | uuid | Owner |
+| conversation_id | uuid | Related conversation, nullable |
+| source | text | `web`, `telegram`, or `scheduled` |
+| status | text | `running`, `completed`, `failed`, or `timeout` |
+| started_at | timestamptz | Run start time |
+| finished_at | timestamptz | Run end time, nullable while running |
+| duration_ms | integer | Wall-clock duration |
+| input_preview | text | First ~200 chars of input |
+| output_preview | text | First ~200 chars of output |
+| tool_calls | jsonb | Array of `{ name, callId, durationMs, status }` |
+| error | text | Final error text, nullable |
+| metadata | jsonb | Extra metadata such as `runId` |
+| created_at | timestamptz | Row creation time |
+
+## RLS Model
+
+User-owned tables enforce `auth.uid() = user_id` semantics:
+- `users`
+- `conversations`
+- `messages` via conversation ownership
+- `integrations`
+- `user_memories`
+- `scheduled_tasks`
+- `telegram_link_tokens`
+- `agent_runs`
+
+Webhook/cron flows use the service-role client where necessary.
 
 ## Indexes
 
+Important indexes currently documented by schema/migrations:
+
 ```sql
--- Performance indexes
 CREATE INDEX idx_conversations_user_id ON conversations(user_id);
 CREATE INDEX idx_messages_conversation_id ON messages(conversation_id);
 CREATE INDEX idx_messages_created_at ON messages(created_at);
@@ -221,44 +220,11 @@ CREATE UNIQUE INDEX idx_user_memories_user_topic ON user_memories(user_id, topic
 CREATE INDEX idx_scheduled_tasks_user_id ON scheduled_tasks(user_id);
 CREATE INDEX idx_scheduled_tasks_run_at ON scheduled_tasks(run_at) WHERE enabled = true;
 CREATE UNIQUE INDEX idx_telegram_link_tokens_token ON telegram_link_tokens(token);
+CREATE INDEX idx_agent_runs_user ON agent_runs(user_id, started_at DESC);
+CREATE INDEX idx_agent_runs_status ON agent_runs(user_id, status) WHERE status = 'running';
 ```
 
-## Triggers
+## Notes
 
-### on_auth_user_created
-
-Automatically creates a user profile when someone signs up.
-
-```sql
-CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE PROCEDURE handle_new_user();
-```
-
-### update_*_updated_at
-
-Automatically updates `updated_at` timestamp on row changes.
-
-```sql
-CREATE TRIGGER update_users_updated_at
-  BEFORE UPDATE ON users
-  FOR EACH ROW EXECUTE PROCEDURE update_updated_at();
-```
-
-## TypeScript Types
-
-See `src/lib/types/database.ts` for TypeScript definitions matching this schema.
-
-## Migration Notes
-
-Migrations are stored in `supabase/migrations/` and should be run via the Supabase SQL Editor.
-
-**Naming convention:** `NNN_description.sql` (e.g., `001_initial_schema.sql`)
-
-**To add a new migration:**
-
-1. Create new file: `supabase/migrations/NNN_description.sql`
-2. Write SQL with rollback comments
-3. Test in development project first
-4. Run in production via SQL Editor
-5. Update TypeScript types to match
+- Planning state and delegation trace state are ephemeral runtime constructs; they are not stored as first-class database tables.
+- The TypeScript source of truth for runtime/database shapes is [src/lib/types/database.ts](/Users/james/Projects/Coding/hada/src/lib/types/database.ts).

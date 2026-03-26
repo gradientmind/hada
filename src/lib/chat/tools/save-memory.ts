@@ -1,25 +1,35 @@
 import type { AgentTool } from "@/lib/chat/agent-loop";
 import type { ToolContext } from "@/lib/chat/tools/types";
 
+import type { ToolManifest } from "@/lib/chat/tools/tool-registry";
+
+export const saveMemoryManifest: ToolManifest = {
+  name: "save_memory",
+  displayName: "Save Memory",
+  description: "Save or update long-term memory for this user under a concise topic key.",
+  category: "memory",
+  riskLevel: "low",
+  parameters: {
+    type: "object",
+    properties: {
+      topic: {
+        type: "string",
+        description: "Short stable topic key, e.g. 'work-hours' or 'travel-preferences'.",
+      },
+      content: {
+        type: "string",
+        description: "Concise memory content to store.",
+      },
+    },
+    required: ["topic", "content"],
+  },
+};
+
 export function createSaveMemoryTool(context: ToolContext): AgentTool {
   return {
-    name: "save_memory",
-    description:
-      "Save or update long-term memory for this user under a concise topic key.",
-    parameters: {
-      type: "object",
-      properties: {
-        topic: {
-          type: "string",
-          description: "Short stable topic key, e.g. 'work-hours' or 'travel-preferences'.",
-        },
-        content: {
-          type: "string",
-          description: "Concise memory content to store.",
-        },
-      },
-      required: ["topic", "content"],
-    },
+    name: saveMemoryManifest.name,
+    description: saveMemoryManifest.description,
+    parameters: saveMemoryManifest.parameters,
     async execute(args) {
       const topic = String(args.topic || "").trim();
       const content = String(args.content || "").trim();

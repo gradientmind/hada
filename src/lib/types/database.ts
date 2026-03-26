@@ -120,6 +120,30 @@ export interface ScheduledTask {
   created_at: string;
 }
 
+export interface AgentRunToolCall {
+  name: string;
+  callId: string;
+  durationMs: number;
+  status: "done" | "error";
+}
+
+export interface AgentRun {
+  id: string;
+  user_id: string;
+  conversation_id: string | null;
+  source: "web" | "telegram" | "scheduled";
+  status: "running" | "completed" | "failed" | "timeout";
+  started_at: string;
+  finished_at: string | null;
+  duration_ms: number | null;
+  input_preview: string | null;
+  output_preview: string | null;
+  tool_calls: AgentRunToolCall[];
+  error: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
 // Chat runtime types
 export interface ChatMessage {
   role: MessageRole;
@@ -133,12 +157,33 @@ export interface ToolDefinition {
   execute: (args: Record<string, unknown>) => Promise<string>;
 }
 
+export interface TaskStep {
+  id: string;
+  title: string;
+  description: string;
+  status: "pending" | "running" | "done" | "failed";
+  toolsNeeded?: string[];
+}
+
+export interface TaskPlan {
+  id: string;
+  goal?: string;
+  steps: TaskStep[];
+}
+
 export type AgentEvent =
-  | { type: "text_delta"; content: string }
-  | { type: "tool_call"; name: string; args: Record<string, unknown> }
-  | { type: "tool_result"; name: string; result: string }
-  | { type: "done"; content: string }
-  | { type: "error"; message: string };
+  | { type: "text_delta"; content: string; agentName?: string }
+  | { type: "tool_call"; name: string; args: Record<string, unknown>; callId: string; agentName?: string }
+  | { type: "tool_result"; name: string; result: string; callId: string; durationMs: number; truncated: boolean; agentName?: string }
+  | { type: "thinking"; content: string; agentName?: string }
+  | { type: "plan_created"; plan: TaskPlan; agentName?: string }
+  | { type: "step_started"; stepId: string; planId: string; agentName?: string }
+  | { type: "step_completed"; stepId: string; planId: string; result: string; agentName?: string }
+  | { type: "step_failed"; stepId: string; planId: string; error: string; agentName?: string }
+  | { type: "delegation_started"; agentName: string; task: string }
+  | { type: "delegation_completed"; agentName: string; result: string }
+  | { type: "done"; content: string; agentName?: string }
+  | { type: "error"; message: string; agentName?: string };
 
 export type Database = {
   public: {
@@ -241,6 +286,27 @@ export type Database = {
           created_at?: string;
         };
         Update: Partial<Omit<ScheduledTask, "id" | "user_id" | "created_at">>;
+        Relationships: [];
+      };
+      agent_runs: {
+        Row: AgentRun;
+        Insert: {
+          id?: string;
+          user_id: string;
+          conversation_id?: string | null;
+          source?: AgentRun["source"];
+          status?: AgentRun["status"];
+          started_at?: string;
+          finished_at?: string | null;
+          duration_ms?: number | null;
+          input_preview?: string | null;
+          output_preview?: string | null;
+          tool_calls?: AgentRunToolCall[];
+          error?: string | null;
+          metadata?: Record<string, unknown>;
+          created_at?: string;
+        };
+        Update: Partial<Omit<AgentRun, "id" | "user_id" | "created_at">>;
         Relationships: [];
       };
     };

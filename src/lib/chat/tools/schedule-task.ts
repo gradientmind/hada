@@ -1,34 +1,44 @@
 import type { AgentTool } from "@/lib/chat/agent-loop";
 import type { ToolContext } from "@/lib/chat/tools/types";
 
+import type { ToolManifest } from "@/lib/chat/tools/tool-registry";
+
+export const scheduleTaskManifest: ToolManifest = {
+  name: "schedule_task",
+  displayName: "Schedule Task",
+  description: "Create one-time or recurring scheduled tasks for reminders/briefings/follow-ups.",
+  category: "system",
+  riskLevel: "medium",
+  parameters: {
+    type: "object",
+    properties: {
+      type: {
+        type: "string",
+        enum: ["once", "recurring"],
+        description: "Task type: once for a single run, recurring for cron-based repetition.",
+      },
+      description: {
+        type: "string",
+        description: "What the scheduled run should ask Hada to do.",
+      },
+      run_at: {
+        type: "string",
+        description: "ISO datetime for one-time tasks.",
+      },
+      cron_expression: {
+        type: "string",
+        description: "Cron expression for recurring tasks (5 fields).",
+      },
+    },
+    required: ["type", "description"],
+  },
+};
+
 export function createScheduleTaskTool(context: ToolContext): AgentTool {
   return {
-    name: "schedule_task",
-    description:
-      "Create one-time or recurring scheduled tasks for reminders/briefings/follow-ups.",
-    parameters: {
-      type: "object",
-      properties: {
-        type: {
-          type: "string",
-          enum: ["once", "recurring"],
-          description: "Task type: once for a single run, recurring for cron-based repetition.",
-        },
-        description: {
-          type: "string",
-          description: "What the scheduled run should ask Hada to do.",
-        },
-        run_at: {
-          type: "string",
-          description: "ISO datetime for one-time tasks.",
-        },
-        cron_expression: {
-          type: "string",
-          description: "Cron expression for recurring tasks (5 fields).",
-        },
-      },
-      required: ["type", "description"],
-    },
+    name: scheduleTaskManifest.name,
+    description: scheduleTaskManifest.description,
+    parameters: scheduleTaskManifest.parameters,
     async execute(args) {
       const type = String(args.type || "").trim();
       const description = String(args.description || "").trim();

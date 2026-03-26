@@ -8,11 +8,15 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { createClient } from "@/lib/supabase/client";
 import { useHealthStatus } from "@/lib/hooks/use-health-status";
 import { CalendarEventCard, type CalendarEventCardProps } from "@/components/chat/calendar-event-card";
+import { AgentTraceTimeline, type TraceEvent, type ThinkingEvent } from "@/components/chat/agent-trace";
+import { TaskPlanCard } from "@/components/chat/task-plan-card";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
+import type { TaskPlan } from "@/lib/types/database";
 import { motion, AnimatePresence } from "framer-motion";
+import { LayoutDashboard } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, type MutableRefObject } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -22,6 +26,10 @@ interface Message {
   content: string;
   thinking?: string;
   cards?: ChatCard[];
+  traceEvents?: TraceEvent[];
+  thinkingEvents?: ThinkingEvent[];
+  plan?: TaskPlan;
+  activeStepId?: string;
   confirmation?: {
     pending: boolean;
     function?: {
@@ -193,6 +201,7 @@ export default function ChatPage() {
   const endOfMessagesRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const eventOrderRef = useRef(0);
   const router = useRouter();
   const supabase = createClient();
   const { status: connectionStatus } = useHealthStatus(30000); // Poll every 30s
@@ -221,6 +230,10 @@ export default function ChatPage() {
     isError: !!msg.metadata?.gatewayError,
     created_at: msg.created_at,
   });
+
+  const updateMessage = useCallback((messageId: string, updater: (message: Message) => Message) => {
+    setMessages((prev) => prev.map((message) => (message.id === messageId ? updater(message) : message)));
+  }, []);
 
   const loadHistory = useCallback(async (before?: string) => {
     try {
@@ -352,6 +365,7 @@ export default function ChatPage() {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
+      eventOrderRef.current = 0;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -373,15 +387,180 @@ export default function ChatPage() {
 
           if (event.type === "text_delta" && typeof event.content === "string") {
             setIsThinking(false);
-            setMessages((prev) =>
-              prev.map((msg) =>
-                msg.id === tempAssistantId
-                  ? { ...msg, content: msg.content + event.content }
-                  : msg,
-              ),
-            );
+            updateMessage(tempAssistantId, (message) => ({
+              ...message,
+              content: message.content + event.content,
+            }));
           } else if (event.type === "tool_call") {
             setIsThinking(true);
+            const order = nextEventOrder(eventOrderRef);
+            const callId = typeof event.callId === "string" ? event.callId : `call_${Date.now()}`;
+            const name = typeof event.name === "string" ? event.name : "unknown";
+            const args = (event.args && typeof event.args === "object") ? event.args as Record<string, unknown> : {};
+            updateMessage(tempAssistantId, (message) => ({
+              ...message,
+              traceEvents: (() => {
+                const traces = message.traceEvents || [];
+                const existingIndex = traces.findIndex((trace) => trace.callId === callId);
+                const nextTrace = {
+                  callId,
+                  name,
+                  args,
+                  agentName: typeof event.agentName === "string" ? event.agentName : undefined,
+                  order,
+                  status: "running" as const,
+                };
+
+                if (existingIndex >= 0) {
+                  return traces.map((trace, index) =>
+                    index === existingIndex
+                      ? {
+                          ...trace,
+                          ...nextTrace,
+                          order: trace.order ?? nextTrace.order,
+                        }
+                      : trace,
+                  );
+                }
+
+                return [...traces, nextTrace];
+              })(),
+            }));
+          } else if (event.type === "tool_result") {
+            const callId = typeof event.callId === "string" ? event.callId : "";
+            const result = typeof event.result === "string" ? event.result : "";
+            const durationMs = typeof event.durationMs === "number" ? event.durationMs : undefined;
+            const truncated = !!event.truncated;
+            updateMessage(tempAssistantId, (message) => ({
+              ...message,
+              traceEvents: (message.traceEvents || []).map((trace) =>
+                trace.callId === callId
+                  ? {
+                      ...trace,
+                      result,
+                      durationMs,
+                      truncated,
+                      agentName:
+                        typeof event.agentName === "string" ? event.agentName : trace.agentName,
+                      status: isToolErrorResult(result) ? "error" as const : "done" as const,
+                    }
+                  : trace,
+              ),
+            }));
+          } else if (event.type === "thinking" && typeof event.content === "string") {
+            const order = nextEventOrder(eventOrderRef);
+            updateMessage(tempAssistantId, (message) => ({
+              ...message,
+              thinkingEvents: (() => {
+                const thinkingEvents = message.thinkingEvents || [];
+                const lastEvent = thinkingEvents[thinkingEvents.length - 1];
+                const nextThinking = {
+                  content: event.content as string,
+                  agentName: typeof event.agentName === "string" ? event.agentName : undefined,
+                  order,
+                };
+
+                if (
+                  lastEvent &&
+                  lastEvent.content === nextThinking.content &&
+                  lastEvent.agentName === nextThinking.agentName
+                ) {
+                  return thinkingEvents;
+                }
+
+                return [...thinkingEvents, nextThinking];
+              })(),
+            }));
+          } else if (event.type === "delegation_started") {
+            const agentName = typeof event.agentName === "string" ? event.agentName : "subagent";
+            updateMessage(tempAssistantId, (message) => ({
+              ...message,
+              traceEvents: (() => {
+                const traces = [...(message.traceEvents || [])];
+                for (let i = traces.length - 1; i >= 0; i -= 1) {
+                  const trace = traces[i];
+                  if (
+                    trace.name === "delegate_task" &&
+                    trace.status === "running" &&
+                    !trace.agentName
+                  ) {
+                    traces[i] = { ...trace, agentName };
+                    return traces;
+                  }
+                }
+
+                return [
+                  ...traces,
+                  {
+                    callId: `delegation-${agentName}-${Date.now()}`,
+                    name: "delegate_task",
+                    args: {
+                      agent: agentName,
+                      task: typeof event.task === "string" ? event.task : "",
+                    },
+                    agentName,
+                    order: nextEventOrder(eventOrderRef),
+                    status: "running" as const,
+                  },
+                ];
+              })(),
+            }));
+          } else if (event.type === "delegation_completed") {
+            // The parent delegate_task tool_result closes the trace with the real callId.
+          } else if (event.type === "plan_created" && isTaskPlan(event.plan)) {
+            const plan = event.plan;
+            updateMessage(tempAssistantId, (message) => ({
+              ...message,
+              plan,
+              activeStepId: undefined,
+            }));
+          } else if (event.type === "step_started") {
+            const stepId = typeof event.stepId === "string" ? event.stepId : "";
+            updateMessage(tempAssistantId, (message) => ({
+              ...message,
+              activeStepId: stepId,
+              plan: message.plan
+                ? {
+                    ...message.plan,
+                    steps: message.plan.steps.map((step) => ({
+                      ...step,
+                      status: step.id === stepId
+                        ? "running"
+                        : step.status === "running"
+                        ? "pending"
+                        : step.status,
+                    })),
+                  }
+                : message.plan,
+            }));
+          } else if (event.type === "step_completed") {
+            const stepId = typeof event.stepId === "string" ? event.stepId : "";
+            updateMessage(tempAssistantId, (message) => ({
+              ...message,
+              activeStepId: message.activeStepId === stepId ? undefined : message.activeStepId,
+              plan: message.plan
+                ? {
+                    ...message.plan,
+                    steps: message.plan.steps.map((step) =>
+                      step.id === stepId ? { ...step, status: "done" as const } : step,
+                    ),
+                  }
+                : message.plan,
+            }));
+          } else if (event.type === "step_failed") {
+            const stepId = typeof event.stepId === "string" ? event.stepId : "";
+            updateMessage(tempAssistantId, (message) => ({
+              ...message,
+              activeStepId: message.activeStepId === stepId ? undefined : message.activeStepId,
+              plan: message.plan
+                ? {
+                    ...message.plan,
+                    steps: message.plan.steps.map((step) =>
+                      step.id === stepId ? { ...step, status: "failed" as const } : step,
+                    ),
+                  }
+                : message.plan,
+            }));
           } else if (event.type === "complete") {
             const realAssistantId = String(event.id ?? tempAssistantId);
             const realUserId = String(event.userMessageId ?? tempUserId);
@@ -549,6 +728,11 @@ export default function ChatPage() {
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground hidden sm:block">{user?.email}</span>
           <ThemeToggle />
+          <Link href="/dashboard">
+            <Button variant="ghost" size="icon" aria-label="Open dashboard">
+              <LayoutDashboard className="h-4 w-4" />
+            </Button>
+          </Link>
           <Link href="/settings">
             <Button variant="ghost" size="sm">
               Settings
@@ -655,6 +839,16 @@ export default function ChatPage() {
                           </Avatar>
                         )}
                         <div className="flex-1 pt-1 space-y-3">
+                          {/* Agent trace timeline */}
+                          {message.role === "assistant" && (message.traceEvents?.length || message.thinkingEvents?.length) ? (
+                            <AgentTraceTimeline
+                              traces={message.traceEvents || []}
+                              thinking={message.thinkingEvents || []}
+                            />
+                          ) : null}
+                          {message.role === "assistant" && message.plan ? (
+                            <TaskPlanCard plan={message.plan} activeStepId={message.activeStepId} />
+                          ) : null}
                           <div className={message.isError ? "text-red-500 dark:text-red-400" : undefined}>
                             <MessageContent content={message.content} />
                             {message.isStreaming && message.content && (
@@ -756,4 +950,36 @@ export default function ChatPage() {
       </div>
     </div>
   );
+}
+
+function isTaskPlan(value: unknown): value is TaskPlan {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const plan = value as TaskPlan;
+  return typeof plan.id === "string" && Array.isArray(plan.steps);
+}
+
+function isToolErrorResult(result: string): boolean {
+  const trimmed = result.trim();
+  if (!trimmed) {
+    return false;
+  }
+
+  if (trimmed === "Tool not found." || trimmed.startsWith("Tool error:")) {
+    return true;
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed) as { success?: unknown; error?: unknown };
+    return parsed.success === false || typeof parsed.error === "string";
+  } catch {
+    return false;
+  }
+}
+
+function nextEventOrder(ref: MutableRefObject<number>): number {
+  ref.current += 1;
+  return ref.current;
 }

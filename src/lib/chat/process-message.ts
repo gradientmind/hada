@@ -8,7 +8,13 @@ import type { ToolContext } from "@/lib/chat/tools/types";
 import { isAdminEmail } from "@/lib/auth/admin";
 import { getOrCreateConversation, saveMessage } from "@/lib/db/conversations";
 import { createAdminClient } from "@/lib/supabase/server";
-import type { AgentEvent, MessageMetadata, MessageSource } from "@/lib/types/database";
+import type {
+  AgentEvent,
+  AgentRun,
+  AgentRunToolCall,
+  MessageMetadata,
+  MessageSource,
+} from "@/lib/types/database";
 
 export interface ProcessMessageOptions {
   userId: string;
@@ -30,6 +36,20 @@ export async function processMessage(options: ProcessMessageOptions): Promise<Pr
   const supabase = options.supabase || createAdminClient();
   const conversation = await getOrCreateConversation(supabase, options.userId);
   const runId = crypto.randomUUID();
+  const agentRunStartedAt = Date.now();
+  const toolCallLog: AgentRunToolCall[] = [];
+  let agentRunStatus: AgentRun["status"] = "running";
+  let responseText = "";
+  let thrownError: unknown = null;
+  let result: ProcessMessageResult | null = null;
+  const agentRunId = await createAgentRunRecord({
+    supabase,
+    conversationId: conversation.id,
+    source: options.source,
+    userId: options.userId,
+    input: options.message,
+    runId,
+  });
 
   const userMessage = await saveMessage(
     supabase,
@@ -63,10 +83,18 @@ export async function processMessage(options: ProcessMessageOptions): Promise<Pr
     tools,
   });
 
+  toolContext.timezone =
+    typeof builtPrompt.userSettings.timezone === "string"
+      ? builtPrompt.userSettings.timezone
+      : null;
+  toolContext.onEvent = options.onEvent;
+  toolContext.availableTools = tools;
+
   const allowModelOverrides = isAdminEmail(builtPrompt.userEmail);
   const provider = resolveProviderSelection(
     allowModelOverrides ? builtPrompt.userSettings : undefined,
   );
+  const systemPrompt = appendRuntimeIdentitySection(builtPrompt.prompt, provider);
   const context = await assembleConversationContext({
     supabase,
     conversationId: conversation.id,
@@ -75,53 +103,89 @@ export async function processMessage(options: ProcessMessageOptions): Promise<Pr
   let assembled = "";
   let fatalError: string | null = null;
 
-  for await (const event of agentLoop({
-    messages: context.messages,
-    systemPrompt: builtPrompt.prompt,
-    tools,
-    provider,
-  })) {
-    if (event.type === "text_delta") {
-      assembled += event.content;
-    } else if (event.type === "done") {
-      if (!assembled.trim()) {
-        assembled = event.content;
+  try {
+    for await (const event of agentLoop({
+      messages: context.messages,
+      systemPrompt,
+      tools,
+      provider,
+    })) {
+      if (event.type === "text_delta") {
+        assembled += event.content;
+      } else if (event.type === "done") {
+        if (!assembled.trim()) {
+          assembled = event.content;
+        }
+      } else if (event.type === "tool_result") {
+        toolCallLog.push({
+          name: event.name,
+          callId: event.callId,
+          durationMs: event.durationMs,
+          status: isToolResultError(event.result) ? "error" : "done",
+        });
+      } else if (event.type === "error") {
+        fatalError = event.message;
       }
-    } else if (event.type === "error") {
-      fatalError = event.message;
-    }
 
-    await emitEvent(options.onEvent, event);
+      await emitEvent(options.onEvent, event);
+    }
+    responseText = assembled.trim() || fatalError || "I ran into an issue while processing that.";
+    const assistantMetadata: MessageMetadata = {
+      source: options.source,
+      runId,
+      ...(fatalError ? { gatewayError: { code: "AGENT_ERROR", message: fatalError } } : {}),
+    };
+
+    const assistantMessage = await saveMessage(
+      supabase,
+      conversation.id,
+      "assistant",
+      responseText,
+      assistantMetadata,
+    );
+
+    await maybeCompactConversation({
+      supabase,
+      conversationId: conversation.id,
+      provider,
+    });
+
+    agentRunStatus = fatalError ? deriveAgentRunStatus(fatalError) : "completed";
+    result = {
+      response: responseText,
+      metadata: assistantMetadata,
+      conversationId: conversation.id,
+      userMessageId: userMessage.id,
+      assistantMessageId: assistantMessage.id,
+    };
+  } catch (error) {
+    fatalError =
+      fatalError ||
+      (error instanceof Error ? error.message : "Unexpected error while processing the message.");
+    responseText = responseText || assembled.trim() || fatalError;
+    agentRunStatus = deriveAgentRunStatus(fatalError);
+    thrownError = error;
+  } finally {
+    await finalizeAgentRunRecord({
+      supabase,
+      agentRunId,
+      durationMs: Date.now() - agentRunStartedAt,
+      status: agentRunStatus,
+      error: fatalError,
+      output: responseText,
+      toolCalls: toolCallLog,
+    });
   }
 
-  const responseText = assembled.trim() || fatalError || "I ran into an issue while processing that.";
-  const assistantMetadata: MessageMetadata = {
-    source: options.source,
-    runId,
-    ...(fatalError ? { gatewayError: { code: "AGENT_ERROR", message: fatalError } } : {}),
-  };
+  if (thrownError) {
+    throw thrownError;
+  }
 
-  const assistantMessage = await saveMessage(
-    supabase,
-    conversation.id,
-    "assistant",
-    responseText,
-    assistantMetadata,
-  );
+  if (!result) {
+    throw new Error("processMessage completed without a result");
+  }
 
-  await maybeCompactConversation({
-    supabase,
-    conversationId: conversation.id,
-    provider,
-  });
-
-  return {
-    response: responseText,
-    metadata: assistantMetadata,
-    conversationId: conversation.id,
-    userMessageId: userMessage.id,
-    assistantMessageId: assistantMessage.id,
-  };
+  return result;
 }
 
 async function emitEvent(
@@ -137,4 +201,118 @@ async function emitEvent(
   } catch (error) {
     console.error("Failed to emit processMessage event", error);
   }
+}
+
+async function createAgentRunRecord(options: {
+  supabase: SupabaseClient;
+  conversationId: string;
+  source: MessageSource;
+  userId: string;
+  input: string;
+  runId: string;
+}): Promise<string | null> {
+  try {
+    const { data, error } = await options.supabase
+      .from("agent_runs")
+      .insert({
+        user_id: options.userId,
+        conversation_id: options.conversationId,
+        source: options.source,
+        status: "running",
+        input_preview: options.input.slice(0, 200),
+        tool_calls: [],
+        metadata: {
+          runId: options.runId,
+        },
+      })
+      .select("id")
+      .single();
+
+    if (error) {
+      console.error("Failed to create agent run record", error);
+      return null;
+    }
+
+    return typeof data?.id === "string" ? data.id : null;
+  } catch (error) {
+    console.error("Failed to create agent run record", error);
+    return null;
+  }
+}
+
+async function finalizeAgentRunRecord(options: {
+  supabase: SupabaseClient;
+  agentRunId: string | null;
+  durationMs: number;
+  status: AgentRun["status"];
+  error: string | null;
+  output: string;
+  toolCalls: AgentRunToolCall[];
+}): Promise<void> {
+  if (!options.agentRunId) {
+    return;
+  }
+
+  try {
+    const { error } = await options.supabase
+      .from("agent_runs")
+      .update({
+        status: options.status,
+        finished_at: new Date().toISOString(),
+        duration_ms: options.durationMs,
+        output_preview: options.output.slice(0, 200),
+        tool_calls: options.toolCalls,
+        error: options.error,
+      })
+      .eq("id", options.agentRunId);
+
+    if (error) {
+      console.error("Failed to finalize agent run record", error);
+    }
+  } catch (error) {
+    console.error("Failed to finalize agent run record", error);
+  }
+}
+
+function deriveAgentRunStatus(error: string | null): AgentRun["status"] {
+  if (!error) {
+    return "completed";
+  }
+
+  return /\btimed out\b/i.test(error) ? "timeout" : "failed";
+}
+
+function isToolResultError(result: string): boolean {
+  const trimmed = result.trim();
+  if (!trimmed) {
+    return false;
+  }
+
+  if (trimmed === "Tool not found." || trimmed.startsWith("Tool error:")) {
+    return true;
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed) as { success?: unknown; error?: unknown };
+    return parsed.success === false || typeof parsed.error === "string";
+  } catch {
+    return false;
+  }
+}
+
+function appendRuntimeIdentitySection(
+  prompt: string,
+  provider: ReturnType<typeof resolveProviderSelection>,
+): string {
+  const runtimeLines = [
+    "## Runtime Identity",
+    "- Assistant: Hada",
+    "- Runtime: Hada built-in agent loop",
+    `- Current LLM provider: ${provider.provider}`,
+    `- Current LLM model: ${provider.model}`,
+    "- When asked about your model/provider/runtime, answer using these values.",
+    "- Do not mention internal or legacy platform names unless they are explicitly provided in this section.",
+  ];
+
+  return `${prompt}\n\n${runtimeLines.join("\n")}`;
 }

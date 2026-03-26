@@ -1,35 +1,36 @@
 # Hada
 
-Hada is an AI assistant web app with a built-in agent loop. It supports web chat, Telegram chat, long-term memory, tool usage (calendar/search/fetch/scheduling), and scheduled task execution.
+Hada is an assistant application built around a local agent loop. It supports web chat, Telegram, long-term memory, scheduled tasks, live trace streaming, multi-step planning, specialist sub-agent delegation, and a dashboard control plane.
 
-## Current Architecture
+## Stack
 
 - Next.js 16 (App Router) + React 19 + TypeScript
-- Supabase (Auth + Postgres + RLS)
+- Supabase Auth + Postgres + RLS
 - Built-in agent loop in `src/lib/chat/agent-loop.ts`
-- Multi-provider LLM support via `src/lib/chat/providers.ts`
-- Shared message pipeline in `src/lib/chat/process-message.ts`
-- Telegram channel via webhook + deep-link account linking
+- Registry-backed tools in `src/lib/chat/tools/`
+- Shared orchestration pipeline in `src/lib/chat/process-message.ts`
+- Multi-provider LLM support in `src/lib/chat/providers.ts`
 
-## Key Features
+## What’s Implemented
 
 - Persistent per-user conversation history
-- Long-term memory (`user_memories`)
-- Context management with sliding window + compaction
-- Web tools:
-  - `web_search`
-  - `web_fetch`
-- Calendar tools (Google integration)
-- Scheduled one-time and recurring tasks (`/api/cron`)
-- Telegram integration (bidirectional)
+- Inline chat execution traces with tool calls, reasoning, and latencies
+- Multi-step task planning via `plan_task`
+- Specialist delegation via `delegate_task`
+- Long-term memory via `user_memories`
+- Web tools: `web_search`, `web_fetch`
+- Google Calendar tools
+- Scheduled one-time and recurring tasks
+- Telegram integration with account linking
+- Dashboard at `/dashboard` for activity, analytics, memories, and tasks
 
 ## Quick Start
 
 ### Prerequisites
 
-- Node.js 20.9+ (`package.json` engines)
+- Node.js 20.9+
 - Supabase project
-- At least one LLM API key
+- At least one supported LLM API key
 
 ### Install
 
@@ -43,28 +44,32 @@ npm install
 cp .env.local.example .env.local
 ```
 
-Fill required values in `.env.local`:
-
+Required values:
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `NEXT_PUBLIC_APP_URL`
-- `LLM_PROVIDER` and matching API key (for example `MINIMAX_API_KEY`)
+- `LLM_PROVIDER`
+- matching provider API key, for example `MINIMAX_API_KEY`
 
-Optional:
-
-- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`
-- `TELEGRAM_BOT_TOKEN` / `TELEGRAM_WEBHOOK_SECRET` / `TELEGRAM_BOT_USERNAME`
-- `SEARCH_PROVIDER` / `SEARCH_API_KEY`
+Common optional values:
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+- `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_WEBHOOK_SECRET`
+- `TELEGRAM_BOT_USERNAME`
+- `SEARCH_PROVIDER`
+- `SEARCH_API_KEY`
 - `CRON_SECRET`
 
 ### Database setup
 
-Run migrations in Supabase SQL editor:
+Run these migrations in Supabase SQL Editor:
 
 - `supabase/migrations/001_initial_schema.sql`
 - `supabase/migrations/002_add_user_permissions.sql`
 - `supabase/migrations/004_agent_and_telegram.sql`
+- `supabase/migrations/005_agent_runs.sql`
 
 ### Run locally
 
@@ -72,28 +77,37 @@ Run migrations in Supabase SQL editor:
 npm run dev
 ```
 
-Open `http://localhost:3000`.
+Open:
+- `http://localhost:3000/chat`
+- `http://localhost:3000/dashboard`
 
-## Build & Lint
+## Verification
 
 ```bash
 npm run lint
 npm run build
 ```
 
-If Turbopack build is restricted in your environment, use:
-
-```bash
-npx next build --webpack
-```
-
 ## Important Paths
 
-- `src/app/api/chat/route.ts` - web chat API
+- `src/app/api/chat/route.ts` - web chat SSE API
+- `src/app/api/tools/route.ts` - tool manifest introspection
+- `src/app/api/dashboard/` - dashboard APIs
 - `src/app/api/webhooks/telegram/route.ts` - Telegram webhook
 - `src/app/api/cron/route.ts` - scheduled task runner
+- `src/app/chat/page.tsx` - chat UI
+- `src/app/dashboard/page.tsx` - dashboard UI
 - `src/lib/chat/agent-loop.ts` - core runtime loop
+- `src/lib/chat/process-message.ts` - orchestration + telemetry
 - `src/lib/chat/tools/` - tool implementations
-- `src/lib/telegram/` - Telegram utilities
-- `docs/ROADMAP.md` - product roadmap
-- `CHANGELOG.md` - change history
+- `src/lib/chat/agents/` - sub-agent profiles
+- `src/components/chat/agent-trace.tsx` - trace/delegation UI
+- `src/components/chat/task-plan-card.tsx` - plan UI
+- `docs/IMPLEMENTATION_PLAN.md` - implementation record
+- `docs/ARCHITECTURE.md` - architecture overview
+- `docs/DATABASE.md` - schema overview
+
+## Notes
+
+- Dashboard task `Run now` is intentionally guarded until immediate execution is wired through the scheduler path.
+- Next.js currently emits a `middleware` → `proxy` deprecation warning during build; the app still builds successfully.

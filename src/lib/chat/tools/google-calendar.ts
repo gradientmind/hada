@@ -7,6 +7,94 @@ import {
   updateCalendarEvent,
 } from "@/lib/google/calendar";
 import { ensureValidGoogleToken } from "@/lib/google/tokens";
+import type { ToolManifest } from "@/lib/chat/tools/tool-registry";
+
+export const listCalendarEventsManifest: ToolManifest = {
+  name: "list_calendar_events",
+  displayName: "Calendar List",
+  description: "List events from the user's Google Calendar in a date/time range.",
+  category: "calendar",
+  riskLevel: "low",
+  requiresIntegration: "google",
+  parameters: {
+    type: "object",
+    properties: {
+      start_date: { type: "string", description: "ISO datetime start." },
+      end_date: { type: "string", description: "ISO datetime end." },
+      max_results: { type: "number", description: "Maximum results (default 10)." },
+      query: { type: "string", description: "Optional text query." },
+    },
+    required: ["start_date", "end_date"],
+  },
+};
+
+export const createCalendarEventManifest: ToolManifest = {
+  name: "create_calendar_event",
+  displayName: "Calendar Create",
+  description: "Create an event in the user's Google Calendar.",
+  category: "calendar",
+  riskLevel: "medium",
+  requiresIntegration: "google",
+  parameters: {
+    type: "object",
+    properties: {
+      summary: { type: "string", description: "Event title." },
+      start: { type: "string", description: "ISO datetime start." },
+      end: { type: "string", description: "ISO datetime end." },
+      description: { type: "string" },
+      location: { type: "string" },
+      attendees: {
+        type: "array",
+        items: { type: "string" },
+        description: "List of attendee emails.",
+      },
+      timeZone: { type: "string" },
+    },
+    required: ["summary", "start", "end"],
+  },
+};
+
+export const updateCalendarEventManifest: ToolManifest = {
+  name: "update_calendar_event",
+  displayName: "Calendar Update",
+  description: "Update an existing Google Calendar event by ID.",
+  category: "calendar",
+  riskLevel: "medium",
+  requiresIntegration: "google",
+  parameters: {
+    type: "object",
+    properties: {
+      event_id: { type: "string", description: "Calendar event ID." },
+      summary: { type: "string" },
+      start: { type: "string" },
+      end: { type: "string" },
+      description: { type: "string" },
+      location: { type: "string" },
+      attendees: {
+        type: "array",
+        items: { type: "string" },
+      },
+      timeZone: { type: "string" },
+    },
+    required: ["event_id"],
+  },
+};
+
+export const deleteCalendarEventManifest: ToolManifest = {
+  name: "delete_calendar_event",
+  displayName: "Calendar Delete",
+  description: "Delete/cancel a Google Calendar event by ID.",
+  category: "calendar",
+  riskLevel: "high",
+  requiresIntegration: "google",
+  parameters: {
+    type: "object",
+    properties: {
+      event_id: { type: "string", description: "Calendar event ID." },
+    },
+    required: ["event_id"],
+  },
+};
 
 function stringifyResult(value: unknown): string {
   return JSON.stringify(value);
@@ -19,18 +107,9 @@ async function getGoogleAccessToken(context: ToolContext): Promise<string | null
 export function createGoogleCalendarTools(context: ToolContext): AgentTool[] {
   return [
     {
-      name: "list_calendar_events",
-      description: "List events from the user's Google Calendar in a date/time range.",
-      parameters: {
-        type: "object",
-        properties: {
-          start_date: { type: "string", description: "ISO datetime start." },
-          end_date: { type: "string", description: "ISO datetime end." },
-          max_results: { type: "number", description: "Maximum results (default 10)." },
-          query: { type: "string", description: "Optional text query." },
-        },
-        required: ["start_date", "end_date"],
-      },
+      name: listCalendarEventsManifest.name,
+      description: listCalendarEventsManifest.description,
+      parameters: listCalendarEventsManifest.parameters,
       async execute(args) {
         const accessToken = await getGoogleAccessToken(context);
         if (!accessToken) {
@@ -82,25 +161,9 @@ export function createGoogleCalendarTools(context: ToolContext): AgentTool[] {
       },
     },
     {
-      name: "create_calendar_event",
-      description: "Create an event in the user's Google Calendar.",
-      parameters: {
-        type: "object",
-        properties: {
-          summary: { type: "string", description: "Event title." },
-          start: { type: "string", description: "ISO datetime start." },
-          end: { type: "string", description: "ISO datetime end." },
-          description: { type: "string" },
-          location: { type: "string" },
-          attendees: {
-            type: "array",
-            items: { type: "string" },
-            description: "List of attendee emails.",
-          },
-          timeZone: { type: "string" },
-        },
-        required: ["summary", "start", "end"],
-      },
+      name: createCalendarEventManifest.name,
+      description: createCalendarEventManifest.description,
+      parameters: createCalendarEventManifest.parameters,
       async execute(args) {
         const accessToken = await getGoogleAccessToken(context);
         if (!accessToken) {
@@ -151,25 +214,9 @@ export function createGoogleCalendarTools(context: ToolContext): AgentTool[] {
       },
     },
     {
-      name: "update_calendar_event",
-      description: "Update an existing Google Calendar event by ID.",
-      parameters: {
-        type: "object",
-        properties: {
-          event_id: { type: "string", description: "Calendar event ID." },
-          summary: { type: "string" },
-          start: { type: "string" },
-          end: { type: "string" },
-          description: { type: "string" },
-          location: { type: "string" },
-          attendees: {
-            type: "array",
-            items: { type: "string" },
-          },
-          timeZone: { type: "string" },
-        },
-        required: ["event_id"],
-      },
+      name: updateCalendarEventManifest.name,
+      description: updateCalendarEventManifest.description,
+      parameters: updateCalendarEventManifest.parameters,
       async execute(args) {
         const accessToken = await getGoogleAccessToken(context);
         if (!accessToken) {
@@ -217,15 +264,9 @@ export function createGoogleCalendarTools(context: ToolContext): AgentTool[] {
       },
     },
     {
-      name: "delete_calendar_event",
-      description: "Delete/cancel a Google Calendar event by ID.",
-      parameters: {
-        type: "object",
-        properties: {
-          event_id: { type: "string", description: "Calendar event ID." },
-        },
-        required: ["event_id"],
-      },
+      name: deleteCalendarEventManifest.name,
+      description: deleteCalendarEventManifest.description,
+      parameters: deleteCalendarEventManifest.parameters,
       async execute(args) {
         const accessToken = await getGoogleAccessToken(context);
         if (!accessToken) {

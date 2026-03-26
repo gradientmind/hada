@@ -1,29 +1,40 @@
 import type { AgentTool } from "@/lib/chat/agent-loop";
 
+import type { ToolManifest } from "@/lib/chat/tools/tool-registry";
+
 interface SearchResult {
   title: string;
   url: string;
   snippet: string;
 }
 
+export const webSearchManifest: ToolManifest = {
+  name: "web_search",
+  displayName: "Web Search",
+  description: "Search the web for current information and return top results.",
+  category: "web",
+  riskLevel: "low",
+  parameters: {
+    type: "object",
+    properties: {
+      query: {
+        type: "string",
+        description: "Search query.",
+      },
+      max_results: {
+        type: "number",
+        description: "Maximum number of results to return (default 5, max 10).",
+      },
+    },
+    required: ["query"],
+  },
+};
+
 export function createWebSearchTool(): AgentTool {
   return {
-    name: "web_search",
-    description: "Search the web for current information and return top results.",
-    parameters: {
-      type: "object",
-      properties: {
-        query: {
-          type: "string",
-          description: "Search query.",
-        },
-        max_results: {
-          type: "number",
-          description: "Maximum number of results to return (default 5, max 10).",
-        },
-      },
-      required: ["query"],
-    },
+    name: webSearchManifest.name,
+    description: webSearchManifest.description,
+    parameters: webSearchManifest.parameters,
     async execute(args, options) {
       const query = String(args.query || "").trim();
       const maxResults = Math.max(

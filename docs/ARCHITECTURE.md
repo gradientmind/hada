@@ -2,293 +2,257 @@
 
 ## Overview
 
-Hada is a multi-tenant SaaS that provides AI assistant capabilities with a built-in agent loop. The architecture prioritizes:
+Hada is a multi-tenant assistant application built around a local agent loop. The current system emphasizes:
 
-1. **Simplicity** - Self-contained, no external AI gateway dependency
-2. **Multi-channel** - Same assistant accessible via web and Telegram
-3. **Cost efficiency** - Universal LLM provider support, choose the best value
-4. **Security** - User data isolation via Row Level Security
+1. Simplicity: orchestration happens inside the app, without an external AI gateway layer.
+2. Multi-channel continuity: web, Telegram, and scheduled runs share the same conversation model.
+3. Observability: chat exposes live traces, and `/dashboard` exposes persisted run telemetry.
+4. Extensibility: tools are registry-driven and delegation is profile-driven.
+5. Security: Supabase Auth plus RLS isolate user data.
 
-## System Architecture
+## High-Level System
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                              Users                                   │
-│              (Web Browser / Telegram / Mobile App)                   │
-└────────────────┬──────────────────────────┬─────────────────────────┘
-                 │                          │
-                 ▼                          ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                         Railway Platform                             │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                      │
-│  ┌────────────────────────────────────────────────────────────────┐ │
-│  │                      Next.js Application                        │ │
-│  │                                                                  │ │
-│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐  │ │
-│  │  │   Frontend   │  │  API Routes  │  │     Middleware       │  │ │
-│  │  │  (React 19)  │  │  (REST)      │  │  (Auth, Sessions)    │  │ │
-│  │  └──────────────┘  └──────┬───────┘  └──────────────────────┘  │ │
-│  │                           │                                      │ │
-│  │                    ┌──────┴───────┐                              │ │
-│  │                    │  Shared Chat │                              │ │
-│  │                    │  Processing  │                              │ │
-│  │                    └──────┬───────┘                              │ │
-│  │                           │                                      │ │
-│  │  ┌────────────────────────┼────────────────────────────────┐    │ │
-│  │  │              Agent Loop Engine                           │    │ │
-│  │  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │    │ │
-│  │  │  │ System Prompt │  │  Tool Exec   │  │   Context    │  │    │ │
-│  │  │  │  Assembly     │  │  (Sequential)│  │   Manager    │  │    │ │
-│  │  │  └──────────────┘  └──────────────┘  └──────────────┘  │    │ │
-│  │  └────────────────────────┬────────────────────────────────┘    │ │
-│  │                           │                                      │ │
-│  │  ┌────────────────────────┼────────────────────────────────┐    │ │
-│  │  │                   Agent Tools                            │    │ │
-│  │  │  ┌────────┐ ┌────────┐ ┌──────┐ ┌────────┐ ┌────────┐  │    │ │
-│  │  │  │Calendar│ │ Memory │ │Search│ │  Fetch │ │Schedule│  │    │ │
-│  │  │  └────────┘ └────────┘ └──────┘ └────────┘ └────────┘  │    │ │
-│  │  └────────────────────────────────────────────────────────┘    │ │
-│  │                                                                  │ │
-│  └────────────────────────────────────────────────────────────────┘ │
-│                           │                                          │
-│              ┌────────────┼────────────┐                            │
-│              ▼            ▼            ▼                            │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐              │
-│  │  PostgreSQL  │  │   Telegram   │  │  Cron Jobs   │              │
-│  │  (Supabase)  │  │  Bot API     │  │  (Scheduled) │              │
-│  └──────────────┘  └──────────────┘  └──────────────┘              │
-│                                                                      │
-└─────────────────────────────────────────────────────────────────────┘
-                           │
-                           ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                       External Services                              │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────────┐  │
-│  │    Stripe    │  │ Google APIs  │  │      LLM Providers       │  │
-│  │  (Billing)   │  │ (Cal/Email)  │  │ MiniMax, Anthropic,      │  │
-│  │              │  │              │  │ OpenAI, Gemini, Kimi,    │  │
-│  │              │  │              │  │ DeepSeek, Groq           │  │
-│  └──────────────┘  └──────────────┘  └──────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────────┘
+```text
+Users (Web / Telegram)
+        │
+        ▼
+Next.js App
+  ├─ App Router UI
+  │   ├─ /chat
+  │   ├─ /dashboard
+  │   └─ /settings
+  ├─ API Routes
+  │   ├─ /api/chat              (SSE stream)
+  │   ├─ /api/tools
+  │   ├─ /api/dashboard/*
+  │   ├─ /api/webhooks/telegram
+  │   └─ /api/cron
+  ├─ Shared orchestration
+  │   ├─ processMessage()
+  │   ├─ agentLoop()
+  │   ├─ buildSystemPrompt()
+  │   └─ context-manager
+  ├─ Tool registry
+  │   ├─ memory tools
+  │   ├─ web tools
+  │   ├─ calendar tools
+  │   ├─ planning tool
+  │   └─ delegation tool
+  └─ Sub-agent profiles
+      ├─ researcher
+      ├─ memory_manager
+      └─ scheduler
+
+Storage / services
+  ├─ Supabase Postgres + Auth
+  ├─ LLM providers
+  ├─ Google APIs
+  └─ Telegram Bot API
 ```
 
-## Data Flow
+## Request Flows
 
-### Authentication Flow
+### Web Chat Flow
 
-```
-User → Login Page → Supabase Auth → Session Cookie → Middleware validates → Protected Routes
-```
-
-1. User enters credentials or clicks OAuth
-2. Supabase handles authentication
-3. Session stored in secure HTTP-only cookie
-4. Middleware refreshes session on each request
-5. Protected routes check for valid session
-
-### Chat Message Flow (Web)
-
-```
-User Input → /api/chat → processMessage() → Agent Loop → LLM Provider → Response → UI Update
+```text
+Chat UI
+  → POST /api/chat
+  → processMessage()
+  → agentLoop()
+  → LLM + tools
+  → SSE events (text, tool, plan, delegation)
+  → UI updates inline
+  → final response + telemetry persisted
 ```
 
-1. User types message in chat UI
-2. Message sent to Next.js API route
-3. `processMessage()` builds system prompt, assembles context
-4. Agent loop calls LLM with tools
-5. If LLM returns tool calls → execute sequentially → re-call LLM
-6. Loop until natural completion, timeout, or error limit
-7. Response saved to database and returned to UI
+Key properties:
+- `/api/chat` returns an SSE stream, not a single JSON blob.
+- The frontend updates assistant text, trace cards, task plans, and delegated sub-agent groups in real time.
+- The final assistant message and `agent_runs` telemetry are saved after the loop completes.
 
-### Chat Message Flow (Telegram)
+### Telegram Flow
 
-```
-User Message → Telegram API → /api/webhooks/telegram → processMessage() → Agent Loop → LLM → editMessageText
-```
-
-1. User sends message via Telegram
-2. Telegram delivers to webhook endpoint
-3. Webhook looks up user via `telegram_chat_id` in integrations
-4. Runs agent loop with streaming
-5. Sends initial message, then edits in-place as response streams (~1 edit/sec)
-6. Message saved to shared conversation
-
-### Agent Loop Flow
-
-```
-┌─────────────────────────────────────────────┐
-│              Agent Loop                      │
-│                                              │
-│  ┌──────────┐    ┌─────────────┐            │
-│  │ Call LLM │───▶│ Stream text │──┐         │
-│  │ w/ tools │    │   deltas    │  │         │
-│  └──────────┘    └─────────────┘  │         │
-│       ▲                           ▼         │
-│       │              ┌──────────────────┐   │
-│       │              │ Tool calls in    │   │
-│       │              │ response?        │   │
-│       │              └────┬────────┬────┘   │
-│       │                   │ Yes    │ No     │
-│       │                   ▼        ▼        │
-│       │          ┌──────────┐  ┌───────┐   │
-│       └──────────│ Execute  │  │ Done  │   │
-│                  │ tools    │  └───────┘   │
-│                  └──────────┘              │
-│                                              │
-│  Stop conditions:                            │
-│  - No tool calls (natural completion)        │
-│  - Timeout (default 60s)                     │
-│  - 3 consecutive tool errors                 │
-└─────────────────────────────────────────────┘
+```text
+Telegram webhook
+  → /api/webhooks/telegram
+  → processMessage()
+  → agentLoop()
+  → bot send/edit message
+  → shared conversation persisted
 ```
 
-### System Prompt Assembly
+Telegram reuses the same orchestration path as web chat, but adapts output through Telegram-safe formatting and message editing.
 
-```
-┌────────────────────────────────┐
-│         System Prompt          │
-├────────────────────────────────┤
-│ 1. Base Persona (system.md)    │
-│    - Identity, personality     │
-│    - Tool usage conventions    │
-│    - Memory management rules   │
-├────────────────────────────────┤
-│ 2. User Context (from DB)     │
-│    - Name, tier, timezone      │
-│    - Connected integrations    │
-├────────────────────────────────┤
-│ 3. Memories (~2000 tokens max) │
-│    - Topic-keyed memories      │
-│    - Most recently updated     │
-├────────────────────────────────┤
-│ 4. Channel Context            │
-│    - "via web" or "via Telegram"│
-└────────────────────────────────┘
+### Scheduled Flow
+
+```text
+Cron trigger
+  → /api/cron
+  → scheduled task lookup
+  → processMessage(source="scheduled")
+  → shared conversation + downstream delivery
 ```
 
-### Data Storage
+## Core Runtime
 
-```
-User Data ──────────────────────────────────────────────────────────┐
-    │                                                                │
-    ▼                                                                ▼
-┌──────────────┐    ┌──────────────┐    ┌──────────────────────────────┐
-│    Users     │    │ Conversations│    │       Integrations           │
-│  (profiles,  │───▶│  (threads)   │    │  (Google, Telegram, etc.)    │
-│   settings)  │    └──────┬───────┘    └──────────────────────────────┘
-└──────┬───────┘           │
-       │                   ▼
-       │            ┌──────────────┐
-       │            │   Messages   │
-       │            │ (web+telegram│
-       │            │  unified)    │
-       │            └──────────────┘
-       │
-       ├───────────▶┌──────────────┐
-       │            │ User Memories│
-       │            │ (topic-keyed)│
-       │            └──────────────┘
-       │
-       └───────────▶┌──────────────────┐
-                    │ Scheduled Tasks  │
-                    │ (once/recurring) │
-                    └──────────────────┘
-```
+### `processMessage()`
+
+`src/lib/chat/process-message.ts` is the orchestration entry point. It is responsible for:
+- creating/finding the user conversation
+- saving the user message
+- resolving integrations and tool availability
+- building the system prompt
+- selecting the provider/model
+- running `agentLoop()`
+- persisting the assistant response
+- recording `agent_runs` telemetry
+
+### `agentLoop()`
+
+`src/lib/chat/agent-loop.ts` is the core execution engine.
+
+Current runtime behaviors:
+- calls the selected LLM with the available tool schema
+- executes tool calls sequentially
+- emits enriched events:
+  - `text_delta`
+  - `thinking`
+  - `tool_call`
+  - `tool_result`
+  - `plan_created`
+  - `step_started`
+  - `step_completed`
+  - `step_failed`
+  - `delegation_started`
+  - `delegation_completed`
+  - `done`
+  - `error`
+- supports timeout handling
+- supports per-loop error limits
+- supports per-loop iteration limits for delegated agents
+
+## Orchestration Layers
+
+### Tool Registry
+
+Tools are no longer hardcoded as a plain list. `src/lib/chat/tools/tool-registry.ts` registers manifests and factories, and exposes:
+- available tool instances for runtime execution
+- manifests for `/api/tools`
+- category/risk metadata for UI/control-plane usage
+
+### Planning
+
+`plan_task` creates an ephemeral `TaskPlan` in the active loop:
+- plan data is kept in runtime/UI state rather than a database table
+- the agent loop tracks the active plan and step progress
+- the web chat renders this as an inline task-plan card
+
+### Delegation
+
+`delegate_task` runs nested specialist agents:
+- `researcher`
+- `memory_manager`
+- `scheduler`
+
+Each delegated run:
+- builds a focused system prompt
+- filters the allowed tool set
+- runs a nested `agentLoop()`
+- forwards child events tagged with `agentName`
+- returns the delegated result to the parent agent
+
+## UI Architecture
+
+### Chat
+
+`/chat` is the primary assistant surface.
+
+Key UI elements:
+- streaming markdown message content
+- `AgentTraceTimeline` for tool/reasoning execution
+- `TaskPlanCard` for plan progress
+- nested delegation trace groups for sub-agent work
+
+### Dashboard
+
+`/dashboard` is the control plane.
+
+Current sections:
+- activity feed from `agent_runs`
+- tool analytics from `agent_runs.tool_calls`
+- memory browser/editor backed by `user_memories`
+- task manager backed by `scheduled_tasks`
+
+## Data Model
+
+Primary persisted entities:
+- `users`
+- `conversations`
+- `messages`
+- `integrations`
+- `user_memories`
+- `scheduled_tasks`
+- `telegram_link_tokens`
+- `agent_runs`
+
+Important non-persisted orchestration state:
+- active task plans
+- current step progress
+- delegated sub-agent event grouping
 
 ## Security Model
 
-### Row Level Security (RLS)
-
-Every table has RLS policies ensuring users can only access their own data:
-
-```sql
--- Example: Users can only view their own conversations
-create policy "Users can view own conversations" on public.conversations
-  for select using (auth.uid() = user_id);
-```
-
 ### Authentication
 
-- Supabase Auth handles all authentication
-- JWT tokens with short expiry
-- Secure HTTP-only cookies for sessions
-- Middleware refreshes sessions automatically
+- Supabase Auth handles sign-in/session management
+- server/client middleware refreshes sessions
+- protected routes include `/chat`, `/dashboard`, and `/settings`
 
-### Webhook Security
+### Authorization
 
-- Telegram webhook verified via secret token header
-- Cron routes protected with internal auth
-- Admin client used for webhook-initiated DB operations (bypasses RLS with service role)
+RLS protects user-owned tables by `auth.uid() = user_id` semantics.
 
-### Data Encryption
+Service-role access is used for:
+- Telegram/webhook flows
+- internal cron-driven work
+- server-side flows that need to bypass end-user RLS safely
 
-- All data encrypted at rest (Supabase default)
-- TLS for all connections
-- OAuth tokens stored encrypted in integrations table
+### External Integrations
 
-## Multi-Channel Architecture
+- Google integration uses OAuth tokens stored in `integrations`
+- Telegram linking uses short-lived `telegram_link_tokens`
+- web search uses provider-specific API keys from env
 
-### Unified Conversation Model
+## Provider Architecture
 
-All channels (web, Telegram, scheduled tasks) share a single conversation per user:
+LLM providers are resolved through `src/lib/chat/providers.ts`.
 
-- Messages tagged with `source` in metadata: `"web"`, `"telegram"`, `"scheduled"`
-- Same agent context regardless of channel
-- Start a thought on Telegram, continue on web
+Supported providers:
+- MiniMax
+- OpenAI
+- Anthropic
+- Gemini
+- Kimi
+- DeepSeek
+- Groq
 
-### Channel-Specific Adapters
+Most providers use an OpenAI-compatible request shape; Anthropic uses a native path.
 
-| Channel | Input | Output | Streaming |
-|---------|-------|--------|-----------|
-| Web | HTTP POST | JSON response | Future: SSE |
-| Telegram | Webhook POST | Bot API `sendMessage` / `editMessageText` | Live message editing |
-| Scheduled | Cron trigger | Telegram + DB save | N/A |
+## Observability
 
-## LLM Provider Architecture
+There are two observability layers:
 
-### Universal Client
+1. Live UI trace:
+- SSE events stream directly into chat
+- users can inspect reasoning/tool activity inline
 
-Most providers support OpenAI-compatible APIs. A single provider registry maps provider names to base URLs and default models:
+2. Persisted run telemetry:
+- `agent_runs` records per-run status, duration, previews, tool calls, and errors
+- dashboard analytics aggregate this for recent activity and tool usage
 
-```
-Request → Provider Registry → OpenAI SDK (with baseURL) → Provider API
-                                    └── Anthropic SDK (native) ──→ Anthropic API
-```
+## Scaling Notes
 
-- Users select provider + model in settings
-- API keys configured per-provider via env vars
-- Adding a new provider = one line in the registry
-
-### Supported Providers
-
-| Provider | API Format | Default Model |
-|----------|-----------|---------------|
-| MiniMax | OpenAI-compatible | MiniMax-M2.1 |
-| OpenAI | Native | gpt-4o |
-| Anthropic | Native SDK | claude-sonnet-4-5 |
-| Gemini | OpenAI-compatible | gemini-2.5-flash |
-| Kimi | OpenAI-compatible | moonshot-v1-auto |
-| DeepSeek | OpenAI-compatible | deepseek-chat |
-| Groq | OpenAI-compatible | llama-3.3-70b |
-
-## Scalability Considerations
-
-### Horizontal Scaling
-
-- Next.js app scales automatically on Railway
-- Stateless request handling (all state in Postgres)
-- No external gateway service to manage
-
-### Database Scaling
-
-- Supabase handles PostgreSQL scaling
-- Connection pooling via Supabase
-- Read replicas available if needed
-
-### Cost Optimization
-
-- Track LLM usage per user for metering
-- Use cheaper models for simple tasks
-- Memory compaction reduces token usage over time
-- Context sliding window prevents unbounded costs
+- The app is largely stateless between requests; durable state lives in Postgres.
+- Context compaction keeps prompt size bounded over time.
+- Telemetry and dashboard queries are indexed by user and time.
+- Delegation currently runs sequentially inside a parent tool call; it does not fan out sub-agents in parallel inside the app runtime.

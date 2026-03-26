@@ -1,21 +1,32 @@
 import type { AgentTool } from "@/lib/chat/agent-loop";
 
+import type { ToolManifest } from "@/lib/chat/tools/tool-registry";
+
 const MAX_FETCH_CHARS = 16_000;
+
+export const webFetchManifest: ToolManifest = {
+  name: "web_fetch",
+  displayName: "Web Fetch",
+  description: "Fetch and extract readable content from a public URL.",
+  category: "web",
+  riskLevel: "low",
+  parameters: {
+    type: "object",
+    properties: {
+      url: {
+        type: "string",
+        description: "Public HTTP(S) URL to fetch.",
+      },
+    },
+    required: ["url"],
+  },
+};
 
 export function createWebFetchTool(): AgentTool {
   return {
-    name: "web_fetch",
-    description: "Fetch and extract readable content from a public URL.",
-    parameters: {
-      type: "object",
-      properties: {
-        url: {
-          type: "string",
-          description: "Public HTTP(S) URL to fetch.",
-        },
-      },
-      required: ["url"],
-    },
+    name: webFetchManifest.name,
+    description: webFetchManifest.description,
+    parameters: webFetchManifest.parameters,
     async execute(args, options) {
       const rawUrl = String(args.url || "").trim();
       if (!rawUrl) {
