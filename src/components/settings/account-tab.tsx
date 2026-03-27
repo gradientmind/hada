@@ -329,6 +329,13 @@ export function AccountTab() {
             {customInstructions.length}/1000
           </p>
         </div>
+
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <span className="text-xs text-zinc-500">{saveMessage || ""}</span>
+          <Button size="sm" onClick={saveSettings} disabled={saving}>
+            {saving ? "Saving..." : "Save"}
+          </Button>
+        </div>
       </div>
 
       <Card className="border-red-200/70 dark:border-red-900/40">
