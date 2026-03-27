@@ -120,7 +120,7 @@ Cron trigger
 - creating/finding the user conversation
 - saving or reusing the user message
 - resolving integrations and tool availability
-- building the system prompt
+- building the system prompt (including persona and custom instructions injection)
 - selecting the provider/model
 - selecting runtime budgets based on the request shape
 - running `agentLoop()`
@@ -227,6 +227,17 @@ Rich-output support currently splits responsibilities this way:
 - `card-extraction` turns supported tool results into typed `metadata.cards`
 - chat card components in `src/components/chat/` render those payloads inline
 
+### Personas
+
+`src/lib/chat/personas.ts` defines pre-built communication style profiles:
+- `Balanced` (default) — the standard Hada experience, no modifier applied
+- `Concise` — minimal words, bullet points, no filler
+- `Friendly` — warm, conversational, casual
+- `Professional` — formal, structured, business-ready
+- `Academic` — thorough, precise, cites reasoning
+
+The selected persona ID and optional custom instructions are stored in `users.settings` as `persona` and `custom_instructions`. `buildSystemPrompt()` reads these at request time and injects a `## Persona` section and a `## Custom Instructions` section into the prompt when non-default values are set. The persona applies uniformly across web, Telegram, and scheduled runs.
+
 ### Planning
 
 `plan_task` creates an ephemeral `TaskPlan` in the active loop:
@@ -282,7 +293,7 @@ Current sections:
 Current sections:
 - runtime/provider status
 - integrations management
-- account preferences and conversation reset
+- account preferences, persona selection, custom instructions, and conversation reset
 - memory management backed by the same `user_memories` table used by the agent loop
 - mobile layout uses a compact section switcher so the active pane is visible immediately
 

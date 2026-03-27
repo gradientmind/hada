@@ -27,7 +27,8 @@ Hada is an assistant application built around a local agent loop. It supports we
 - Google Calendar tools
 - Scheduled one-time and recurring tasks
 - Telegram integration with account linking
-- Settings at `/settings` for runtime status, integrations, preferences, memory management, and chat reset
+- Agent personas (Balanced, Concise, Friendly, Professional, Academic) and custom instructions, configurable per user in Settings
+- Settings at `/settings` for runtime status, integrations, preferences, persona, memory management, and chat reset
 - Dashboard at `/dashboard` for activity, analytics, memories, and tasks
 - Responsive chat/settings layouts tuned for mobile and narrow viewports
 
@@ -130,6 +131,7 @@ npm run build
 - `src/lib/chat/process-message.ts` - orchestration + telemetry
 - `src/lib/chat/card-extraction.ts` - tool-result to rich-card extraction
 - `src/lib/chat/memory-extraction.ts` - post-turn memory extraction
+- `src/lib/chat/personas.ts` - pre-built persona profiles and lookup helper
 - `src/lib/chat/embeddings.ts` - OpenAI embedding generation helper
 - `src/lib/chat/runtime-budgets.ts` - normal vs long-job budget selection
 - `src/lib/background-jobs.ts` - queueing, processing, and polling helpers

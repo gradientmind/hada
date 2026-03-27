@@ -56,13 +56,17 @@ Example `settings` payload:
 {
   "llm_provider": "minimax",
   "llm_model": "MiniMax-M2.1",
-  "timezone": "America/New_York"
+  "timezone": "America/New_York",
+  "persona": "concise",
+  "custom_instructions": "Always respond in Korean when I write in Korean."
 }
 ```
 
 Notes:
 - `llm_provider` / `llm_model` are runtime preferences; model override behavior is gated by application logic, not by the schema itself.
 - `timezone` is used to personalize scheduling and time-aware responses.
+- `persona` selects a pre-built communication style (`balanced`, `concise`, `friendly`, `professional`, `academic`). Omitting it or setting it to `balanced` uses the default prompt with no modifier.
+- `custom_instructions` is injected verbatim into the system prompt as a `## Custom Instructions` section; `null` or omitted means no custom instructions are applied.
 
 Example `permissions` payload:
 
