@@ -3,6 +3,7 @@ import type { LLMProviderName, UserSettings } from "@/lib/types/database";
 export interface ProviderConfig {
   baseUrl: string;
   defaultModel: string;
+  fallbackModel?: string;
   apiKeyEnv: string;
   native?: boolean;
   extraHeaders?: Record<string, string>;
@@ -79,7 +80,8 @@ export const PROVIDERS: Record<LLMProviderName, ProviderConfig> = {
   },
   openrouter: {
     baseUrl: "https://openrouter.ai/api/v1",
-    defaultModel: "anthropic/claude-sonnet-4-5",
+    defaultModel: "minimax/minimax-m2.7",
+    fallbackModel: "moonshotai/kimi-k2.5",
     apiKeyEnv: "OPENROUTER_API_KEY",
     extraHeaders: {
       "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "https://hada.app",
@@ -129,7 +131,24 @@ export async function callLLM(options: {
   if (selection.config.native) {
     return callAnthropic(options);
   }
-  return callOpenAICompatible(options);
+  try {
+    return await callOpenAICompatible(options);
+  } catch (error) {
+    const fallback = selection.config.fallbackModel;
+    if (fallback && fallback !== selection.model && !isAbortError(error)) {
+      return callOpenAICompatible({
+        ...options,
+        selection: { ...selection, model: fallback },
+      });
+    }
+    throw error;
+  }
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException
+    ? error.name === "AbortError"
+    : error instanceof Error && error.name === "AbortError";
 }
 
 async function callOpenAICompatible(options: {
