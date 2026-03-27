@@ -2,7 +2,7 @@ import type { AgentTool } from "@/lib/chat/agent-loop";
 
 import type { ToolManifest } from "@/lib/chat/tools/tool-registry";
 
-const MAX_FETCH_CHARS = 16_000;
+const MAX_FETCH_CHARS = 24_000;
 
 export const webFetchManifest: ToolManifest = {
   name: "web_fetch",
@@ -47,9 +47,15 @@ export function createWebFetchTool(): AgentTool {
       try {
         const response = await fetch(url.toString(), {
           signal: options?.signal,
+          redirect: "follow",
           headers: {
-            "User-Agent": "HadaBot/1.0 (+https://hada.app)",
-            Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "User-Agent":
+              "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Cache-Control": "no-cache",
+            "Upgrade-Insecure-Requests": "1",
           },
         });
 
@@ -86,17 +92,45 @@ export function createWebFetchTool(): AgentTool {
 }
 
 function htmlToText(html: string): string {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
+  // Strip boilerplate blocks before any tag processing
+  const stripped = html
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<noscript[\s\S]*?<\/noscript>/gi, "")
+    .replace(/<!--[\s\S]*?-->/g, "")
+    // Common non-content regions by tag+role/class heuristics
+    .replace(/<(nav|header|footer|aside|banner|form)[\s\S]*?<\/\1>/gi, "")
+    .replace(/<[^>]*(role=["'](navigation|banner|contentinfo|complementary)["'])[^>]*>[\s\S]*?<\/[^>]+>/gi, "");
+
+  // Try to extract a semantic content region
+  const contentPatterns = [
+    /<article[^>]*>([\s\S]*?)<\/article>/i,
+    /<main[^>]*>([\s\S]*?)<\/main>/i,
+    /<div[^>]*\b(?:class|id)=["'][^"']*\b(?:article|post|content|story|body|entry|text|prose)[^"']*["'][^>]*>([\s\S]*?)<\/div>/i,
+    /<section[^>]*\b(?:class|id)=["'][^"']*\b(?:article|post|content|story|body)[^"']*["'][^>]*>([\s\S]*?)<\/section>/i,
+  ];
+
+  let source = stripped;
+  for (const pattern of contentPatterns) {
+    const match = stripped.match(pattern);
+    if (match && match[1] && match[1].length > 500) {
+      source = match[1];
+      break;
+    }
+  }
+
+  return source
     .replace(/<br\s*\/?\s*>/gi, "\n")
     .replace(/<\/p>/gi, "\n\n")
+    .replace(/<\/h[1-6]>/gi, "\n\n")
+    .replace(/<\/li>/gi, "\n")
     .replace(/<[^>]+>/g, " ")
     .replace(/&nbsp;/g, " ")
     .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
     .replace(/\r/g, "")
     .replace(/\n{3,}/g, "\n\n")
     .replace(/[ \t]{2,}/g, " ")

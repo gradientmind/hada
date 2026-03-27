@@ -26,7 +26,7 @@ export const webSearchManifest: ToolManifest = {
       },
       max_results: {
         type: "number",
-        description: "Maximum number of results to return (default 5, max 10).",
+        description: "Maximum number of results to return (default 10, max 20).",
       },
     },
     required: ["query"],
@@ -42,7 +42,7 @@ export function createWebSearchTool(): AgentTool {
       const query = String(args.query || "").trim();
       const maxResults = Math.max(
         1,
-        Math.min(Number(args.max_results || 5) || 5, 10),
+        Math.min(Number(args.max_results || 10) || 10, 20),
       );
 
       if (!query) {
