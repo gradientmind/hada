@@ -5,6 +5,7 @@ export interface ProviderConfig {
   defaultModel: string;
   apiKeyEnv: string;
   native?: boolean;
+  extraHeaders?: Record<string, string>;
 }
 
 export interface LLMToolDefinition {
@@ -76,6 +77,15 @@ export const PROVIDERS: Record<LLMProviderName, ProviderConfig> = {
     defaultModel: "llama-3.3-70b",
     apiKeyEnv: "GROQ_API_KEY",
   },
+  openrouter: {
+    baseUrl: "https://openrouter.ai/api/v1",
+    defaultModel: "anthropic/claude-sonnet-4-5",
+    apiKeyEnv: "OPENROUTER_API_KEY",
+    extraHeaders: {
+      "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "https://hada.app",
+      "X-Title": "Hada",
+    },
+  },
 };
 
 export interface ProviderSelection {
@@ -137,6 +147,7 @@ async function callOpenAICompatible(options: {
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${selection.apiKey}`,
+      ...selection.config.extraHeaders,
     },
     body: JSON.stringify({
       model: selection.model,
