@@ -19,6 +19,7 @@ interface UserProfile {
 }
 
 const PROVIDER_OPTIONS: Array<{ value: LLMProviderName; label: string }> = [
+  { value: "openrouter", label: "OpenRouter" },
   { value: "minimax", label: "MiniMax" },
   { value: "openai", label: "OpenAI" },
   { value: "anthropic", label: "Anthropic" },

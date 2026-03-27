@@ -100,10 +100,7 @@ function resolveSearchApiKey(provider: string): string {
   }
 
   if (provider === "brave") {
-    return (
-      (process.env.BRAVE_SEARCH_API_KEY || "").trim() ||
-      (process.env.BRAVE_API_KEY || "").trim()
-    );
+    return (process.env.BRAVE_API_KEY || "").trim();
   }
 
   if (provider === "serpapi") {

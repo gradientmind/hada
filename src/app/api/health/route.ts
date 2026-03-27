@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { PROVIDERS } from "@/lib/chat/providers";
+import { PROVIDERS, DEFAULT_PROVIDER } from "@/lib/chat/providers";
 import { isAdminEmail } from "@/lib/auth/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { LLMProviderName } from "@/lib/types/database";
@@ -19,10 +19,9 @@ export interface HealthStatus {
 }
 
 export async function GET(): Promise<NextResponse<HealthStatus>> {
-  const provider = String(process.env.LLM_PROVIDER || "minimax").toLowerCase() as LLMProviderName;
-  const selected = PROVIDERS[provider] ? provider : "minimax";
-  const keyEnv = PROVIDERS[selected].apiKeyEnv;
-  const llmConfigured = Boolean(process.env[keyEnv] || process.env.LLM_API_KEY);
+  const provider = String(process.env.LLM_PROVIDER || DEFAULT_PROVIDER).toLowerCase() as LLMProviderName;
+  const selected = PROVIDERS[provider] ? provider : DEFAULT_PROVIDER;
+  const llmConfigured = Boolean(process.env.LLM_API_KEY);
   let visibleProvider: string | null = null;
 
   try {

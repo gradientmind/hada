@@ -1,10 +1,11 @@
 import type { LLMProviderName, UserSettings } from "@/lib/types/database";
 
+export const DEFAULT_PROVIDER: LLMProviderName = "openrouter";
+
 export interface ProviderConfig {
   baseUrl: string;
   defaultModel: string;
   fallbackModel?: string;
-  apiKeyEnv: string;
   native?: boolean;
   extraHeaders?: Record<string, string>;
 }
@@ -45,44 +46,36 @@ export const PROVIDERS: Record<LLMProviderName, ProviderConfig> = {
   minimax: {
     baseUrl: "https://api.minimax.io/v1",
     defaultModel: "MiniMax-M2.7",
-    apiKeyEnv: "MINIMAX_API_KEY",
   },
   anthropic: {
     baseUrl: "https://api.anthropic.com/v1",
     defaultModel: "claude-sonnet-4-5-20250929",
-    apiKeyEnv: "ANTHROPIC_API_KEY",
     native: true,
   },
   openai: {
     baseUrl: "https://api.openai.com/v1",
     defaultModel: "gpt-4o",
-    apiKeyEnv: "OPENAI_API_KEY",
   },
   gemini: {
     baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
     defaultModel: "gemini-2.5-flash",
-    apiKeyEnv: "GEMINI_API_KEY",
   },
   kimi: {
     baseUrl: "https://api.moonshot.cn/v1",
     defaultModel: "moonshot-v1-auto",
-    apiKeyEnv: "MOONSHOT_API_KEY",
   },
   deepseek: {
     baseUrl: "https://api.deepseek.com/v1",
     defaultModel: "deepseek-chat",
-    apiKeyEnv: "DEEPSEEK_API_KEY",
   },
   groq: {
     baseUrl: "https://api.groq.com/openai/v1",
     defaultModel: "llama-3.3-70b",
-    apiKeyEnv: "GROQ_API_KEY",
   },
   openrouter: {
     baseUrl: "https://openrouter.ai/api/v1",
     defaultModel: "minimax/minimax-m2.7",
     fallbackModel: "moonshotai/kimi-k2.5",
-    apiKeyEnv: "OPENROUTER_API_KEY",
     extraHeaders: {
       "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "https://hada.app",
       "X-Title": "Hada",
@@ -99,23 +92,25 @@ export interface ProviderSelection {
 
 export function resolveProviderSelection(settings?: UserSettings): ProviderSelection {
   const preferred = String(
-    settings?.llm_provider || process.env.LLM_PROVIDER || "minimax",
+    settings?.llm_provider || process.env.LLM_PROVIDER || DEFAULT_PROVIDER,
   ).toLowerCase() as LLMProviderName;
-  const provider = PROVIDERS[preferred] ? preferred : "minimax";
-  const config = PROVIDERS[provider];
+  const provider = PROVIDERS[preferred] ? preferred : DEFAULT_PROVIDER;
+  const config = { ...PROVIDERS[provider] };
+
+  // LLM_BASE_URL overrides the provider's default base URL
+  if (process.env.LLM_BASE_URL) {
+    config.baseUrl = process.env.LLM_BASE_URL;
+  }
 
   const model =
     (typeof settings?.llm_model === "string" && settings.llm_model.trim()) ||
+    process.env.LLM_MODEL ||
     config.defaultModel;
 
-  const apiKey =
-    process.env[config.apiKeyEnv] ||
-    process.env.LLM_API_KEY ||
-    (provider === "kimi" ? process.env.KIMI_API_KEY : undefined) ||
-    "";
+  const apiKey = process.env.LLM_API_KEY || "";
 
   if (!apiKey) {
-    throw new Error(`Missing API key for provider "${provider}" (${config.apiKeyEnv}).`);
+    throw new Error(`Missing API key for provider "${provider}". Set the LLM_API_KEY environment variable.`);
   }
 
   return { provider, model, apiKey, config };
