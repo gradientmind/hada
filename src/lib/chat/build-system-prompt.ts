@@ -68,12 +68,30 @@ export async function buildSystemPrompt(options: {
       ? "This is a scheduled/system-initiated run. Be proactive and direct."
       : "User is messaging via the web chat UI.";
 
+  const userTimezone = typeof userSettings.timezone === "string" ? userSettings.timezone : "UTC";
+  const now = new Date();
+  const localDatetime = new Intl.DateTimeFormat("en-US", {
+    timeZone: userTimezone,
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZoneName: "short",
+  }).format(now);
+  const userLocation = userTimezone.includes("/")
+    ? userTimezone.split("/").pop()!.replace(/_/g, " ")
+    : userTimezone;
+
   const userContextLines = [
     `- Name: ${user?.name || "Unknown"}`,
     `- Email: ${user?.email || "Unknown"}`,
     `- Tier: ${user?.tier || "free"}`,
     `- Integrations: ${connectedIntegrations.length ? connectedIntegrations.join(", ") : "none"}`,
-    `- Timezone: ${typeof userSettings.timezone === "string" ? userSettings.timezone : "unknown"}`,
+    `- Timezone: ${userTimezone}`,
+    `- Location: ${userLocation}`,
+    `- Current date/time: ${localDatetime}`,
   ];
 
   const sections = [
