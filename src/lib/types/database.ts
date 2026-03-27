@@ -24,6 +24,8 @@ export interface UserSettings {
   llm_provider?: LLMProviderName;
   llm_model?: string | null;
   timezone?: string | null;
+  persona?: string;
+  custom_instructions?: string | null;
   [key: string]: unknown;
 }
 
@@ -100,6 +102,7 @@ export interface UserMemory {
   user_id: string;
   topic: string;
   content: string;
+  embedding: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -285,6 +288,7 @@ export type Database = {
           user_id: string;
           topic: string;
           content: string;
+          embedding?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -378,7 +382,23 @@ export type Database = {
       };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      match_user_memories: {
+        Args: {
+          query_embedding: string;
+          match_user_id: string;
+          match_threshold?: number;
+          match_count?: number;
+        };
+        Returns: Array<{
+          id: string;
+          topic: string;
+          content: string;
+          updated_at: string;
+          similarity: number;
+        }>;
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };
