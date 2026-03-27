@@ -1353,6 +1353,7 @@ export default function ChatPage() {
                             <AgentTraceTimeline
                               traces={message.traceEvents || []}
                               thinking={message.thinkingEvents || []}
+                              isStreaming={message.isStreaming}
                             />
                           ) : null}
                           {message.role === "assistant" && message.plan ? (

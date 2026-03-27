@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronDown,
@@ -226,15 +226,79 @@ function ThinkingCard({ content }: { content: string }) {
 export interface AgentTraceTimelineProps {
   traces: TraceEvent[];
   thinking?: ThinkingEvent[];
+  isStreaming?: boolean;
 }
 
-export function AgentTraceTimeline({ traces, thinking = [] }: AgentTraceTimelineProps) {
+export function AgentTraceTimeline({ traces, thinking = [], isStreaming }: AgentTraceTimelineProps) {
   if (!traces.length && !thinking.length) return null;
 
   const items = buildTimelineItems(traces, thinking);
 
+  return <TraceTimeline items={items} traces={traces} thinking={thinking} isStreaming={isStreaming} />;
+}
+
+function TraceTimeline({
+  items,
+  traces,
+  thinking,
+  isStreaming,
+}: {
+  items: ReturnType<typeof buildTimelineItems>;
+  traces: TraceEvent[];
+  thinking: ThinkingEvent[];
+  isStreaming?: boolean;
+}) {
+  const [collapsed, setCollapsed] = useState(false);
+  const prevStreamingRef = useRef(isStreaming);
+
+  useEffect(() => {
+    if (prevStreamingRef.current && !isStreaming) {
+      setCollapsed(true);
+    }
+    prevStreamingRef.current = isStreaming;
+  }, [isStreaming]);
+
+  // Build summary label
+  const thinkingCount = thinking.length;
+  const toolCounts: Record<string, number> = {};
+  for (const t of traces) {
+    if (t.name !== "delegate_task") {
+      toolCounts[t.name] = (toolCounts[t.name] || 0) + 1;
+    }
+  }
+  const totalMs = traces.reduce((sum, t) => sum + (t.durationMs || 0), 0);
+  const summaryParts: string[] = [];
+  if (thinkingCount) summaryParts.push(thinkingCount === 1 ? "1 reasoning" : `${thinkingCount} reasonings`);
+  for (const [name, count] of Object.entries(toolCounts)) {
+    const label = getToolMeta(name).label.toLowerCase();
+    summaryParts.push(count === 1 ? `1 ${label}` : `${count} ${label}s`);
+  }
+  const summaryText = summaryParts.join(" · ") || `${traces.length} steps`;
+  const durationText = totalMs > 0 ? ` · ${formatDuration(totalMs)}` : "";
+
+  if (collapsed) {
+    return (
+      <button
+        onClick={() => setCollapsed(false)}
+        className="mb-2 flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800/60 dark:hover:text-zinc-300"
+      >
+        <ChevronRight className="h-3 w-3 shrink-0" />
+        <span>{summaryText}{durationText}</span>
+      </button>
+    );
+  }
+
   return (
     <div className="space-y-1.5 mb-2">
+      {!isStreaming && (
+        <button
+          onClick={() => setCollapsed(true)}
+          className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800/60 dark:hover:text-zinc-300"
+        >
+          <ChevronDown className="h-3 w-3 shrink-0" />
+          <span>Hide steps</span>
+        </button>
+      )}
       <TimelineItemsList items={items} />
     </div>
   );
