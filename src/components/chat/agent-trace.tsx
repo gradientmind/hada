@@ -248,7 +248,7 @@ function TraceTimeline({
   thinking: ThinkingEvent[];
   isStreaming?: boolean;
 }) {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(isStreaming !== true);
   const prevStreamingRef = useRef(isStreaming);
 
   useEffect(() => {

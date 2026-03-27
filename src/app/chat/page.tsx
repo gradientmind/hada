@@ -1359,6 +1359,20 @@ export default function ChatPage() {
                           {message.role === "assistant" && message.plan ? (
                             <TaskPlanCard plan={message.plan} activeStepId={message.activeStepId} />
                           ) : null}
+                          {/* Search result cards appear before text as sources */}
+                          {message.cards?.filter((c) => c.type === "search_results").map((card, idx) => {
+                            const data = card.data as SearchResultsCardPayload["data"] | undefined;
+                            if (data?.results?.length) {
+                              return (
+                                <SearchResultsCard
+                                  key={`${message.id}-src-${idx}`}
+                                  query={data.query || ""}
+                                  results={data.results as SearchResultItem[]}
+                                />
+                              );
+                            }
+                            return null;
+                          })}
                           <div className={`min-w-0 overflow-hidden ${message.isError ? "text-red-500 dark:text-red-400" : ""}`}>
                             {message.isStreaming && !message.content ? (
                               <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-zinc-200/70 bg-zinc-50/80 px-3 py-1.5 text-xs text-zinc-500 dark:border-zinc-800/70 dark:bg-zinc-950/50 dark:text-zinc-400">
@@ -1375,8 +1389,8 @@ export default function ChatPage() {
                               <span className="inline-block h-4 w-0.5 bg-zinc-400 animate-pulse ml-0.5" />
                             )}
                           </div>
-                          {/* Render calendar cards */}
-                          {message.cards?.map((card, idx) => {
+                          {/* Non-search cards (calendar, table, schedule) after text */}
+                          {message.cards?.filter((c) => c.type !== "search_results").map((card, idx) => {
                             if (card.type === "calendar_event" && isCalendarEventData(card.data)) {
                               return (
                                 <CalendarEventCard
@@ -1401,18 +1415,6 @@ export default function ChatPage() {
                                     actions={["reschedule", "cancel"]}
                                   />
                                 ));
-                            }
-                            if (card.type === "search_results") {
-                              const data = card.data as SearchResultsCardPayload["data"] | undefined;
-                              if (data?.results?.length) {
-                                return (
-                                  <SearchResultsCard
-                                    key={`${message.id}-card-${idx}`}
-                                    query={data.query || ""}
-                                    results={data.results as SearchResultItem[]}
-                                  />
-                                );
-                              }
                             }
                             if (card.type === "schedule_view") {
                               const data = card.data as ScheduleViewCardPayload["data"] | undefined;
