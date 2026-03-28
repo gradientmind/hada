@@ -10,8 +10,8 @@ import { useHealthStatus } from "@/lib/hooks/use-health-status";
 import { CalendarEventCard, type CalendarEventCardProps } from "@/components/chat/calendar-event-card";
 import { DataTableCard } from "@/components/chat/data-table-card";
 import { SmartCard } from "@/components/chat/smart-cards";
-import { MermaidDiagram } from "@/components/chat/mermaid-diagram";
-import { InlineChart } from "@/components/chat/inline-chart";
+import { RichMessageContent } from "@/components/chat/rich-message-content";
+import { cn } from "@/lib/utils";
 import { AgentTraceTimeline, type TraceEvent, type ThinkingEvent } from "@/components/chat/agent-trace";
 import { ScheduleViewCard } from "@/components/chat/schedule-view-card";
 import { TaskPlanCard } from "@/components/chat/task-plan-card";
@@ -134,6 +134,10 @@ type ChatCard =
       actions?: string[];
     };
 
+function hasVisualContent(content: string): boolean {
+  return /```(mermaid|chart)\n/m.test(content);
+}
+
 function MessageContent({ content }: { content: string }) {
   return (
     <div className="min-w-0 w-full max-w-full overflow-hidden text-sm leading-relaxed space-y-1 [overflow-wrap:anywhere] [&>*]:min-w-0 [&>*:last-child]:mb-0">
@@ -168,26 +172,11 @@ function MessageContent({ content }: { content: string }) {
           h6: ({ children }) => (
             <p className="font-medium mb-1 text-zinc-500 dark:text-zinc-500">{children}</p>
           ),
-          pre: ({ children }) => {
-            // Check if this pre contains a mermaid or chart code block
-            const child = Array.isArray(children) ? children[0] : children;
-            if (child && typeof child === "object" && "props" in child) {
-              const codeProps = child.props as { className?: string; children?: React.ReactNode };
-              const lang = codeProps.className?.replace("language-", "");
-              const text = String(codeProps.children ?? "").replace(/\n$/, "");
-              if (lang === "mermaid") {
-                return <MermaidDiagram chart={text} />;
-              }
-              if (lang === "chart") {
-                return <InlineChart code={text} />;
-              }
-            }
-            return (
-              <pre className="mb-2 max-w-full overflow-x-auto rounded-lg bg-zinc-100 p-3 font-mono text-xs whitespace-pre dark:bg-zinc-800">
-                {children}
-              </pre>
-            );
-          },
+          pre: ({ children }) => (
+            <pre className="mb-2 max-w-full overflow-x-auto rounded-lg bg-zinc-100 p-3 font-mono text-xs whitespace-pre dark:bg-zinc-800">
+              {children}
+            </pre>
+          ),
           code: ({ className, children }) => {
             const isBlock = !!className;
             return isBlock ? (
@@ -1340,14 +1329,16 @@ export default function ChatPage() {
                   </motion.div>
                 ) : (
                   <AnimatePresence>
-                    {messages.map((message) => (
+                    {messages.map((message) => {
+                      const isRich = message.role === "assistant" && !message.isStreaming && hasVisualContent(message.content);
+                      return (
                       <motion.div
                         key={message.id}
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         transition={{ duration: 0.18, ease: "easeOut" }}
-                        className="flex min-w-0 gap-2 sm:gap-3"
+                        className={cn("flex min-w-0 gap-2 sm:gap-3", isRich && "max-w-none -mx-3 sm:-mx-4 md:-mx-6 px-3 sm:px-4 md:px-6")}
                       >
                         {message.role === "assistant" ? (
                           <div className="h-8 w-8 shrink-0 rounded-full avatar-accent-ring">
@@ -1388,7 +1379,11 @@ export default function ChatPage() {
                                 <span>{getStreamingStatusLabel(message)}</span>
                               </div>
                             ) : null}
-                            <MessageContent content={message.content} />
+                            {message.role === "assistant" ? (
+                              <RichMessageContent content={message.content} isStreaming={message.isStreaming} />
+                            ) : (
+                              <MessageContent content={message.content} />
+                            )}
                             {message.isStreaming && message.content && (
                               <span className="inline-block h-4 w-0.5 bg-zinc-400 animate-pulse ml-0.5" />
                             )}
@@ -1486,7 +1481,8 @@ export default function ChatPage() {
                           )}
                         </div>
                       </motion.div>
-                    ))}
+                      );
+                    })}
                   </AnimatePresence>
                 )}
                 <div ref={endOfMessagesRef} />
