@@ -251,7 +251,8 @@ export default function ChatPage() {
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [hasMoreHistory, setHasMoreHistory] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [artifactDismissed, setArtifactDismissed] = useState(false);
+  const [openArtifactMsgId, setOpenArtifactMsgId] = useState<string | null>(null);
+  const autoOpenedRef = useRef<Set<string>>(new Set());
   const endOfMessagesRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -1040,28 +1041,34 @@ export default function ChatPage() {
     .find((message) => message.role === "assistant" && message.content.trim());
   const shouldShowLanding = !showConversation && !isLoading;
 
-  // Derive current artifact from the latest non-streaming assistant message with visuals
+  // Build artifact from a specific message, or null if panel is closed
   const currentArtifact = useMemo((): ArtifactData | null => {
-    if (artifactDismissed) return null;
-    // Find last assistant message with visuals (not streaming)
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const msg = messages[i];
-      if (msg.role === "assistant" && !msg.isStreaming && msg.content) {
-        const { visuals, textContent } = extractVisuals(msg.content);
-        if (visuals.length > 0) {
-          const { title, subtitle } = extractArtifactTitle(textContent);
-          return { title, subtitle, visuals, textContent };
-        }
+    if (!openArtifactMsgId || !showConversation) return null;
+    const msg = messages.find((m) => m.id === openArtifactMsgId);
+    if (!msg || msg.isStreaming) return null;
+    const { visuals, textContent } = extractVisuals(msg.content);
+    if (visuals.length === 0) return null;
+    const { title, subtitle } = extractArtifactTitle(textContent);
+    return { title, subtitle, visuals, textContent };
+  }, [openArtifactMsgId, messages, showConversation]);
+
+  // Auto-open artifact panel the first time a new message with visuals finishes streaming
+  useEffect(() => {
+    const lastMsg = messages[messages.length - 1];
+    if (
+      lastMsg &&
+      lastMsg.role === "assistant" &&
+      !lastMsg.isStreaming &&
+      lastMsg.content &&
+      !autoOpenedRef.current.has(lastMsg.id)
+    ) {
+      const { visuals } = extractVisuals(lastMsg.content);
+      if (visuals.length > 0) {
+        autoOpenedRef.current.add(lastMsg.id);
+        setOpenArtifactMsgId(lastMsg.id);
       }
     }
-    return null;
-  }, [messages, artifactDismissed]);
-
-  // Reset dismiss when new messages arrive with visuals
-  const lastMsgId = messages[messages.length - 1]?.id;
-  useEffect(() => {
-    setArtifactDismissed(false);
-  }, [lastMsgId]);
+  }, [messages]);
 
   const inputForm = (
     <form onSubmit={handleSubmit}>
@@ -1404,7 +1411,7 @@ export default function ChatPage() {
                               </div>
                             ) : null}
                             {message.role === "assistant" ? (
-                              <RichMessageContent content={message.content} isStreaming={message.isStreaming} artifactOpen={!!currentArtifact} />
+                              <RichMessageContent content={message.content} isStreaming={message.isStreaming} artifactOpen={openArtifactMsgId === message.id} />
                             ) : (
                               <MessageContent content={message.content} />
                             )}
@@ -1412,6 +1419,34 @@ export default function ChatPage() {
                               <span className="inline-block h-4 w-0.5 bg-zinc-400 animate-pulse ml-0.5" />
                             )}
                           </div>
+                          {/* Artifact link for messages with visuals */}
+                          {message.role === "assistant" && !message.isStreaming && message.content && (() => {
+                            const { visuals } = extractVisuals(message.content);
+                            if (visuals.length === 0) return null;
+                            const { title } = extractArtifactTitle(extractVisuals(message.content).textContent);
+                            const isOpen = openArtifactMsgId === message.id;
+                            return (
+                              <button
+                                type="button"
+                                onClick={() => setOpenArtifactMsgId(isOpen ? null : message.id)}
+                                className={cn(
+                                  "mt-1 inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium transition-all",
+                                  isOpen
+                                    ? "border-teal-500/40 bg-teal-500/10 text-teal-600 dark:border-teal-500/30 dark:text-teal-400"
+                                    : "border-zinc-200 bg-zinc-50 text-zinc-500 hover:border-zinc-300 hover:text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-400 dark:hover:border-zinc-700 dark:hover:text-zinc-300",
+                                )}
+                              >
+                                <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                  <rect x="2" y="1.5" width="12" height="13" rx="2" />
+                                  <path d="M5 5h6M5 8h6M5 11h3" />
+                                </svg>
+                                <span className="max-w-[200px] truncate">{title}</span>
+                                {isOpen ? (
+                                  <span className="rounded bg-teal-500/20 px-1.5 py-0.5 text-[10px] uppercase tracking-wider">Open</span>
+                                ) : null}
+                              </button>
+                            );
+                          })()}
                           {message.cards?.map((card, idx) => {
                             if (card.type === "calendar_event" && isCalendarEventData(card.data)) {
                               return (
@@ -1526,7 +1561,7 @@ export default function ChatPage() {
           <div className="hidden h-full lg:block lg:w-[55%] xl:w-[60%]">
             <ArtifactPanel
               artifact={currentArtifact}
-              onClose={() => setArtifactDismissed(true)}
+              onClose={() => setOpenArtifactMsgId(null)}
             />
           </div>
         ) : null}
