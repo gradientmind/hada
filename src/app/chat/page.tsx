@@ -10,7 +10,8 @@ import { useHealthStatus } from "@/lib/hooks/use-health-status";
 import { CalendarEventCard, type CalendarEventCardProps } from "@/components/chat/calendar-event-card";
 import { DataTableCard } from "@/components/chat/data-table-card";
 import { SmartCard } from "@/components/chat/smart-cards";
-import { RichMessageContent } from "@/components/chat/rich-message-content";
+import { RichMessageContent, extractVisuals, extractArtifactTitle } from "@/components/chat/rich-message-content";
+import { ArtifactPanel, type ArtifactData } from "@/components/chat/artifact-panel";
 import { cn } from "@/lib/utils";
 import { AgentTraceTimeline, type TraceEvent, type ThinkingEvent } from "@/components/chat/agent-trace";
 import { ScheduleViewCard } from "@/components/chat/schedule-view-card";
@@ -27,7 +28,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { LayoutDashboard, LogOut, Settings2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useEffect, useState, useRef, useCallback, type MutableRefObject } from "react";
+import { useEffect, useMemo, useState, useRef, useCallback, type MutableRefObject } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -133,10 +134,6 @@ type ChatCard =
       data?: unknown;
       actions?: string[];
     };
-
-function hasVisualContent(content: string): boolean {
-  return /```(mermaid|chart)\n/m.test(content);
-}
 
 function MessageContent({ content }: { content: string }) {
   return (
@@ -254,6 +251,7 @@ export default function ChatPage() {
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [hasMoreHistory, setHasMoreHistory] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [artifactDismissed, setArtifactDismissed] = useState(false);
   const endOfMessagesRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -1042,6 +1040,29 @@ export default function ChatPage() {
     .find((message) => message.role === "assistant" && message.content.trim());
   const shouldShowLanding = !showConversation && !isLoading;
 
+  // Derive current artifact from the latest non-streaming assistant message with visuals
+  const currentArtifact = useMemo((): ArtifactData | null => {
+    if (artifactDismissed) return null;
+    // Find last assistant message with visuals (not streaming)
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      if (msg.role === "assistant" && !msg.isStreaming && msg.content) {
+        const { visuals, textContent } = extractVisuals(msg.content);
+        if (visuals.length > 0) {
+          const { title, subtitle } = extractArtifactTitle(textContent);
+          return { title, subtitle, visuals, textContent };
+        }
+      }
+    }
+    return null;
+  }, [messages, artifactDismissed]);
+
+  // Reset dismiss when new messages arrive with visuals
+  const lastMsgId = messages[messages.length - 1]?.id;
+  useEffect(() => {
+    setArtifactDismissed(false);
+  }, [lastMsgId]);
+
   const inputForm = (
     <form onSubmit={handleSubmit}>
       <div className="glass relative rounded-2xl">
@@ -1167,8 +1188,13 @@ export default function ChatPage() {
       </header>
 
       {/* Main Content Area */}
-      <div className="flex-1 overflow-hidden">
-        <div className="mx-auto flex h-full w-full max-w-4xl flex-col px-3 sm:px-4 md:px-6">
+      <div className="flex-1 overflow-hidden flex">
+        <div className={cn(
+          "flex h-full flex-col transition-all duration-300",
+          currentArtifact
+            ? "w-full lg:w-[45%] xl:w-[40%] px-3 sm:px-4"
+            : "w-full max-w-4xl mx-auto px-3 sm:px-4 md:px-6",
+        )}>
 
           {/* Messages Area */}
           <div className="flex-1 min-h-0 py-4">
@@ -1329,16 +1355,14 @@ export default function ChatPage() {
                   </motion.div>
                 ) : (
                   <AnimatePresence>
-                    {messages.map((message) => {
-                      const isRich = message.role === "assistant" && !message.isStreaming && hasVisualContent(message.content);
-                      return (
+                    {messages.map((message) => (
                       <motion.div
                         key={message.id}
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         transition={{ duration: 0.18, ease: "easeOut" }}
-                        className={cn("flex min-w-0 gap-2 sm:gap-3", isRich && "max-w-none -mx-3 sm:-mx-4 md:-mx-6 px-3 sm:px-4 md:px-6")}
+                        className="flex min-w-0 gap-2 sm:gap-3"
                       >
                         {message.role === "assistant" ? (
                           <div className="h-8 w-8 shrink-0 rounded-full avatar-accent-ring">
@@ -1380,7 +1404,7 @@ export default function ChatPage() {
                               </div>
                             ) : null}
                             {message.role === "assistant" ? (
-                              <RichMessageContent content={message.content} isStreaming={message.isStreaming} />
+                              <RichMessageContent content={message.content} isStreaming={message.isStreaming} artifactOpen={!!currentArtifact} />
                             ) : (
                               <MessageContent content={message.content} />
                             )}
@@ -1481,8 +1505,7 @@ export default function ChatPage() {
                           )}
                         </div>
                       </motion.div>
-                      );
-                    })}
+                    ))}
                   </AnimatePresence>
                 )}
                 <div ref={endOfMessagesRef} />
@@ -1497,6 +1520,16 @@ export default function ChatPage() {
             </div>
           )}
         </div>
+
+        {/* Artifact Panel */}
+        {currentArtifact ? (
+          <div className="hidden h-full lg:block lg:w-[55%] xl:w-[60%]">
+            <ArtifactPanel
+              artifact={currentArtifact}
+              onClose={() => setArtifactDismissed(true)}
+            />
+          </div>
+        ) : null}
       </div>
     </div>
   );

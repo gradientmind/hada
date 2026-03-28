@@ -1,10 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { MermaidDiagram } from "@/components/chat/mermaid-diagram";
 import { InlineChart } from "@/components/chat/inline-chart";
-import { cn } from "@/lib/utils";
-import { Maximize2, Minimize2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -13,81 +11,43 @@ interface Visual {
   code: string;
 }
 
-function extractVisuals(content: string): { visuals: Visual[]; textContent: string } {
+export function extractVisuals(content: string): { visuals: Visual[]; textContent: string } {
   const visuals: Visual[] = [];
-  // Match ```mermaid ... ``` and ```chart ... ``` blocks
   const pattern = /```(mermaid|chart)\n([\s\S]*?)```/g;
   const textContent = content.replace(pattern, (_, lang: string, code: string) => {
     visuals.push({ type: lang as "mermaid" | "chart", code: code.trim() });
-    return ""; // remove from text flow
+    return "";
   });
   return { visuals, textContent: textContent.trim() };
 }
 
-function VisualPanel({ visual }: { visual: Visual }) {
-  if (visual.type === "mermaid") {
-    return <MermaidDiagram chart={visual.code} />;
+export function extractArtifactTitle(textContent: string): { title: string; subtitle?: string } {
+  const lines = textContent.split("\n");
+  // Look for first heading
+  for (const line of lines) {
+    const match = line.match(/^#{1,2}\s+(.+)/);
+    if (match) {
+      return { title: match[1].replace(/\*\*/g, "").trim() };
+    }
   }
-  return <InlineChart code={visual.code} />;
+  // Fallback: first non-empty line
+  const firstLine = lines.find((l) => l.trim().length > 0);
+  return { title: firstLine?.replace(/[#*]/g, "").trim() || "Response" };
 }
 
 interface RichMessageContentProps {
   content: string;
   isStreaming?: boolean;
+  artifactOpen?: boolean;
 }
 
-export function RichMessageContent({ content, isStreaming }: RichMessageContentProps) {
-  const [expanded, setExpanded] = useState(false);
-  const { visuals, textContent } = useMemo(() => extractVisuals(content), [content]);
+export function RichMessageContent({ content, isStreaming, artifactOpen }: RichMessageContentProps) {
+  const { textContent } = useMemo(() => extractVisuals(content), [content]);
 
-  const hasVisuals = visuals.length > 0 && !isStreaming;
+  // If artifact panel is showing visuals, render only the text portion
+  const displayContent = artifactOpen && !isStreaming ? textContent : content;
 
-  if (!hasVisuals) {
-    return <PlainMarkdown content={content} />;
-  }
-
-  return (
-    <div className="min-w-0 w-full">
-      {/* Side-by-side on large screens, stacked on small */}
-      <div className={cn(
-        "flex flex-col gap-4",
-        "lg:flex-row lg:items-start lg:gap-5",
-      )}>
-        {/* Visual panel */}
-        <div className={cn(
-          "shrink-0 w-full",
-          "lg:sticky lg:top-2 lg:self-start",
-          expanded ? "lg:w-[55%]" : "lg:w-[45%]",
-          "transition-[width] duration-200",
-        )}>
-          <div className="relative">
-            <div className="space-y-3">
-              {visuals.map((visual, i) => (
-                <VisualPanel key={i} visual={visual} />
-              ))}
-            </div>
-            {/* Expand/collapse toggle */}
-            <button
-              type="button"
-              onClick={() => setExpanded((v) => !v)}
-              className="absolute right-2 top-2 hidden rounded-lg border border-zinc-200 bg-white/90 p-1.5 text-zinc-400 shadow-sm backdrop-blur transition-colors hover:text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900/90 dark:hover:text-zinc-200 lg:block"
-              aria-label={expanded ? "Shrink visual" : "Expand visual"}
-            >
-              {expanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
-            </button>
-          </div>
-        </div>
-
-        {/* Text content */}
-        <div className={cn(
-          "min-w-0 flex-1",
-          expanded ? "lg:w-[45%]" : "lg:w-[55%]",
-        )}>
-          <PlainMarkdown content={textContent} />
-        </div>
-      </div>
-    </div>
-  );
+  return <PlainMarkdown content={displayContent} />;
 }
 
 function PlainMarkdown({ content }: { content: string }) {
