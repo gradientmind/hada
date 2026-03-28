@@ -1438,6 +1438,7 @@ export default function ChatPage() {
                                   key={`${message.id}-card-${idx}`}
                                   type={card.type}
                                   data={card.data}
+                                  onAction={(msg) => void sendMessage(msg)}
                                 />
                               );
                             }

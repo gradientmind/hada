@@ -11,9 +11,10 @@ export interface SmartCardProps {
   type?: string;
   title?: string;
   data?: unknown;
+  onAction?: (message: string) => void;
 }
 
-export function SmartCard({ type, title, data }: SmartCardProps) {
+export function SmartCard({ type, title, data, onAction }: SmartCardProps) {
   const card = normalizeSmartCard({ type, title, data });
 
   if (!card) {
@@ -27,12 +28,13 @@ export function SmartCard({ type, title, data }: SmartCardProps) {
           title={card.data.title}
           items={card.data.items}
           verdict={card.data.verdict}
+          onAction={onAction}
         />
       );
     case "steps":
-      return <StepsCard title={card.data.title} steps={card.data.steps} />;
+      return <StepsCard title={card.data.title} steps={card.data.steps} onAction={onAction} />;
     case "checklist":
-      return <ChecklistCard title={card.data.title} groups={card.data.groups} />;
+      return <ChecklistCard title={card.data.title} groups={card.data.groups} onAction={onAction} />;
     default:
       return null;
   }
