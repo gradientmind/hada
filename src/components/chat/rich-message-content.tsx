@@ -1,6 +1,5 @@
 "use client";
 
-import { useMemo } from "react";
 import { MermaidDiagram } from "@/components/chat/mermaid-diagram";
 import { InlineChart } from "@/components/chat/inline-chart";
 import ReactMarkdown from "react-markdown";
@@ -38,16 +37,10 @@ export function extractArtifactTitle(textContent: string): { title: string; subt
 interface RichMessageContentProps {
   content: string;
   isStreaming?: boolean;
-  artifactOpen?: boolean;
 }
 
-export function RichMessageContent({ content, isStreaming, artifactOpen }: RichMessageContentProps) {
-  const { textContent } = useMemo(() => extractVisuals(content), [content]);
-
-  // If artifact panel is showing visuals, render only the text portion
-  const displayContent = artifactOpen && !isStreaming ? textContent : content;
-
-  return <PlainMarkdown content={displayContent} />;
+export function RichMessageContent({ content }: RichMessageContentProps) {
+  return <PlainMarkdown content={content} />;
 }
 
 function PlainMarkdown({ content }: { content: string }) {

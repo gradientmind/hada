@@ -10,9 +10,7 @@ import { useHealthStatus } from "@/lib/hooks/use-health-status";
 import { CalendarEventCard, type CalendarEventCardProps } from "@/components/chat/calendar-event-card";
 import { DataTableCard } from "@/components/chat/data-table-card";
 import { SmartCard } from "@/components/chat/smart-cards";
-import { RichMessageContent, extractVisuals, extractArtifactTitle } from "@/components/chat/rich-message-content";
-import { ArtifactPanel, type ArtifactData } from "@/components/chat/artifact-panel";
-import { cn } from "@/lib/utils";
+import { RichMessageContent } from "@/components/chat/rich-message-content";
 import { AgentTraceTimeline, type TraceEvent, type ThinkingEvent } from "@/components/chat/agent-trace";
 import { ScheduleViewCard } from "@/components/chat/schedule-view-card";
 import { TaskPlanCard } from "@/components/chat/task-plan-card";
@@ -28,7 +26,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { LayoutDashboard, LogOut, Settings2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useEffect, useMemo, useState, useRef, useCallback, type MutableRefObject } from "react";
+import { useEffect, useState, useRef, useCallback, type MutableRefObject } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -251,8 +249,6 @@ export default function ChatPage() {
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [hasMoreHistory, setHasMoreHistory] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [openArtifactMsgId, setOpenArtifactMsgId] = useState<string | null>(null);
-  const autoOpenedRef = useRef<Set<string>>(new Set());
   const endOfMessagesRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -1041,35 +1037,6 @@ export default function ChatPage() {
     .find((message) => message.role === "assistant" && message.content.trim());
   const shouldShowLanding = !showConversation && !isLoading;
 
-  // Build artifact from a specific message, or null if panel is closed
-  const currentArtifact = useMemo((): ArtifactData | null => {
-    if (!openArtifactMsgId || !showConversation) return null;
-    const msg = messages.find((m) => m.id === openArtifactMsgId);
-    if (!msg || msg.isStreaming) return null;
-    const { visuals, textContent } = extractVisuals(msg.content);
-    if (visuals.length === 0) return null;
-    const { title } = extractArtifactTitle(textContent);
-    return { title, visuals };
-  }, [openArtifactMsgId, messages, showConversation]);
-
-  // Auto-open artifact panel the first time a new message with visuals finishes streaming
-  useEffect(() => {
-    const lastMsg = messages[messages.length - 1];
-    if (
-      lastMsg &&
-      lastMsg.role === "assistant" &&
-      !lastMsg.isStreaming &&
-      lastMsg.content &&
-      !autoOpenedRef.current.has(lastMsg.id)
-    ) {
-      const { visuals } = extractVisuals(lastMsg.content);
-      if (visuals.length > 0) {
-        autoOpenedRef.current.add(lastMsg.id);
-        setOpenArtifactMsgId(lastMsg.id);
-      }
-    }
-  }, [messages]);
-
   const inputForm = (
     <form onSubmit={handleSubmit}>
       <div className="glass relative rounded-2xl">
@@ -1196,12 +1163,7 @@ export default function ChatPage() {
 
       {/* Main Content Area */}
       <div className="flex-1 overflow-hidden flex">
-        <div className={cn(
-          "flex h-full flex-col transition-all duration-300",
-          currentArtifact
-            ? "w-full lg:w-[45%] xl:w-[40%] px-3 sm:px-4"
-            : "w-full max-w-4xl mx-auto px-3 sm:px-4 md:px-6",
-        )}>
+        <div className="flex h-full flex-col w-full max-w-4xl mx-auto px-3 sm:px-4 md:px-6">
 
           {/* Messages Area */}
           <div className="flex-1 min-h-0 py-4">
@@ -1411,7 +1373,7 @@ export default function ChatPage() {
                               </div>
                             ) : null}
                             {message.role === "assistant" ? (
-                              <RichMessageContent content={message.content} isStreaming={message.isStreaming} artifactOpen={openArtifactMsgId === message.id} />
+                              <RichMessageContent content={message.content} isStreaming={message.isStreaming} />
                             ) : (
                               <MessageContent content={message.content} />
                             )}
@@ -1419,34 +1381,6 @@ export default function ChatPage() {
                               <span className="inline-block h-4 w-0.5 bg-zinc-400 animate-pulse ml-0.5" />
                             )}
                           </div>
-                          {/* Artifact link for messages with visuals */}
-                          {message.role === "assistant" && !message.isStreaming && message.content && (() => {
-                            const { visuals } = extractVisuals(message.content);
-                            if (visuals.length === 0) return null;
-                            const { title } = extractArtifactTitle(extractVisuals(message.content).textContent);
-                            const isOpen = openArtifactMsgId === message.id;
-                            return (
-                              <button
-                                type="button"
-                                onClick={() => setOpenArtifactMsgId(isOpen ? null : message.id)}
-                                className={cn(
-                                  "mt-1 inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium transition-all",
-                                  isOpen
-                                    ? "border-teal-500/40 bg-teal-500/10 text-teal-600 dark:border-teal-500/30 dark:text-teal-400"
-                                    : "border-zinc-200 bg-zinc-50 text-zinc-500 hover:border-zinc-300 hover:text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-400 dark:hover:border-zinc-700 dark:hover:text-zinc-300",
-                                )}
-                              >
-                                <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                                  <rect x="2" y="1.5" width="12" height="13" rx="2" />
-                                  <path d="M5 5h6M5 8h6M5 11h3" />
-                                </svg>
-                                <span className="max-w-[200px] truncate">{title}</span>
-                                {isOpen ? (
-                                  <span className="rounded bg-teal-500/20 px-1.5 py-0.5 text-[10px] uppercase tracking-wider">Open</span>
-                                ) : null}
-                              </button>
-                            );
-                          })()}
                           {message.cards?.map((card, idx) => {
                             if (card.type === "calendar_event" && isCalendarEventData(card.data)) {
                               return (
@@ -1556,15 +1490,6 @@ export default function ChatPage() {
           )}
         </div>
 
-        {/* Artifact Panel */}
-        {currentArtifact ? (
-          <div className="hidden h-full lg:block lg:w-[55%] xl:w-[60%]">
-            <ArtifactPanel
-              artifact={currentArtifact}
-              onClose={() => setOpenArtifactMsgId(null)}
-            />
-          </div>
-        ) : null}
       </div>
     </div>
   );
