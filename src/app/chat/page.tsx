@@ -2,33 +2,21 @@
 
 export const dynamic = "force-dynamic";
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { createClient } from "@/lib/supabase/client";
 import { useHealthStatus } from "@/lib/hooks/use-health-status";
-import { CalendarEventCard, type CalendarEventCardProps } from "@/components/chat/calendar-event-card";
-import { DataTableCard } from "@/components/chat/data-table-card";
-import { SmartCard } from "@/components/chat/smart-cards";
-import { RichMessageContent } from "@/components/chat/rich-message-content";
-import { AgentTraceTimeline, type TraceEvent, type ThinkingEvent } from "@/components/chat/agent-trace";
-import { ScheduleViewCard } from "@/components/chat/schedule-view-card";
-import { TaskPlanCard } from "@/components/chat/task-plan-card";
+import { type CalendarEventCardProps } from "@/components/chat/calendar-event-card";
+import { type TraceEvent, type ThinkingEvent } from "@/components/chat/agent-trace";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
+import { ChatMessageRow } from "@/components/chat/chat-message-row";
 import type { TaskPlan } from "@/lib/types/database";
-import type {
-  DataTableCardPayload,
-  RichCard,
-  ScheduleBlock,
-  ScheduleViewCardPayload,
-} from "@/lib/types/cards";
+import type { RichCard } from "@/lib/types/cards";
 import { motion, AnimatePresence } from "framer-motion";
 import { LayoutDashboard, LogOut, Settings2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useEffect, useState, useRef, useCallback, type MutableRefObject } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 
 interface Message {
   id: string;
@@ -146,108 +134,6 @@ type ChatCard =
       data?: unknown;
       actions?: string[];
     };
-
-function MessageContent({ content }: { content: string }) {
-  return (
-    <div className="min-w-0 w-full max-w-full overflow-hidden text-sm leading-relaxed space-y-1 [overflow-wrap:anywhere] [&>*]:min-w-0 [&>*:last-child]:mb-0">
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        components={{
-          p: ({ children }) => (
-            <p className="mb-2 last:mb-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{children}</p>
-          ),
-          ul: ({ children }) => (
-            <ul className="mb-2 list-disc space-y-1 pl-5 break-words [overflow-wrap:anywhere]">{children}</ul>
-          ),
-          ol: ({ children }) => (
-            <ol className="mb-2 list-decimal space-y-1 pl-5 break-words [overflow-wrap:anywhere]">{children}</ol>
-          ),
-          li: ({ children }) => <li className="leading-snug break-words [overflow-wrap:anywhere]">{children}</li>,
-          h1: ({ children }) => (
-            <p className="mt-3 mb-2 text-base font-bold text-zinc-900 first:mt-0 dark:text-zinc-100">{children}</p>
-          ),
-          h2: ({ children }) => (
-            <p className="mt-3 mb-1.5 text-sm font-bold text-zinc-900 first:mt-0 dark:text-zinc-100">{children}</p>
-          ),
-          h3: ({ children }) => (
-            <p className="mt-2 mb-1 font-semibold text-zinc-900 first:mt-0 dark:text-zinc-100">{children}</p>
-          ),
-          h4: ({ children }) => (
-            <p className="mt-2 mb-1 font-semibold text-zinc-700 first:mt-0 dark:text-zinc-300">{children}</p>
-          ),
-          h5: ({ children }) => (
-            <p className="font-medium mb-1 text-zinc-600 dark:text-zinc-400">{children}</p>
-          ),
-          h6: ({ children }) => (
-            <p className="font-medium mb-1 text-zinc-500 dark:text-zinc-500">{children}</p>
-          ),
-          pre: ({ children }) => (
-            <pre className="mb-2 max-w-full overflow-x-auto rounded-lg bg-zinc-100 p-3 font-mono text-xs whitespace-pre dark:bg-zinc-800">
-              {children}
-            </pre>
-          ),
-          code: ({ className, children }) => {
-            const isBlock = !!className;
-            return isBlock ? (
-              <code className={`${className} break-words`}>{children}</code>
-            ) : (
-              <code className="break-all rounded bg-zinc-100 px-1 py-0.5 font-mono text-xs dark:bg-zinc-800">
-                {children}
-              </code>
-            );
-          },
-          a: ({ href, children }) => (
-            <a
-              href={href}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="break-all text-blue-600 underline hover:no-underline dark:text-blue-400"
-            >
-              {children}
-            </a>
-          ),
-          blockquote: ({ children }) => (
-            <blockquote className="mb-2 border-l-4 border-zinc-300 pl-4 italic break-words text-zinc-500 [overflow-wrap:anywhere] dark:border-zinc-600 dark:text-zinc-400">
-              {children}
-            </blockquote>
-          ),
-          table: ({ children }) => (
-            <div className="my-2 max-w-full overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-800">
-              <table className="w-full min-w-[20rem] border-collapse text-xs">{children}</table>
-            </div>
-          ),
-          th: ({ children }) => (
-            <th className="border-b border-zinc-200 bg-zinc-50 px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-400">
-              {children}
-            </th>
-          ),
-          td: ({ children }) => (
-            <td className="border-b border-zinc-100 px-3 py-2 break-words align-top text-zinc-700 dark:border-zinc-800/60 dark:text-zinc-300">
-              {children}
-            </td>
-          ),
-          hr: () => <hr className="my-3 border-zinc-200 dark:border-zinc-700" />,
-        }}
-      >
-        {content}
-      </ReactMarkdown>
-    </div>
-  );
-}
-
-function isCalendarEventData(value: unknown): value is CalendarEventCardData {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-
-  const event = value as Record<string, unknown>;
-  return (
-    typeof event.id === "string" &&
-    typeof event.summary === "string" &&
-    typeof event.start === "string" &&
-    typeof event.end === "string"
-  );
-}
 
 export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -1003,6 +889,39 @@ export default function ChatPage() {
     });
   };
 
+  const handleCopyMessage = async (_messageId: string, content: string) => {
+    await navigator.clipboard.writeText(content);
+  };
+
+  const handleRegenerateMessage = async (assistantMessageId: string) => {
+    await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ regenerateAssistantMessageId: assistantMessageId }),
+    });
+  };
+
+  const handleMessageFeedback = async (assistantMessageId: string, value: "up" | "down") => {
+    // Optimistic update
+    updateMessage(assistantMessageId, (message) => ({
+      ...message,
+      feedback: { value, updated_at: new Date().toISOString() },
+    }));
+    try {
+      await fetch(`/api/messages/${assistantMessageId}/feedback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ value }),
+      });
+    } catch {
+      // Revert optimistic update on error
+      updateMessage(assistantMessageId, (message) => ({
+        ...message,
+        feedback: message.feedback?.value === value ? undefined : message.feedback,
+      }));
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     await sendMessage();
@@ -1361,148 +1280,16 @@ export default function ChatPage() {
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         transition={{ duration: 0.18, ease: "easeOut" }}
-                        className="flex min-w-0 gap-2 sm:gap-3"
                       >
-                        {message.role === "assistant" ? (
-                          <div className="h-8 w-8 shrink-0 rounded-full avatar-accent-ring">
-                            <Avatar className="h-full w-full">
-                              <AvatarFallback className="gradient-brand text-white text-xs font-bold">
-                                H
-                              </AvatarFallback>
-                            </Avatar>
-                          </div>
-                        ) : (
-                          <Avatar className="h-8 w-8 shrink-0">
-                            <AvatarFallback className="bg-zinc-200 dark:bg-zinc-700">
-                              {user?.name?.[0] || "U"}
-                            </AvatarFallback>
-                          </Avatar>
-                        )}
-                        <div className="min-w-0 flex-1 overflow-hidden pt-1 space-y-3">
-                          {/* Agent trace timeline */}
-                          {message.role === "assistant" && (message.traceEvents?.length || message.thinkingEvents?.length) ? (
-                            <AgentTraceTimeline
-                              key={`${message.id}-${message.isStreaming ? "streaming" : "idle"}`}
-                              traces={message.traceEvents || []}
-                              thinking={message.thinkingEvents || []}
-                              isStreaming={message.isStreaming}
-                            />
-                          ) : null}
-                          {message.role === "assistant" && message.plan ? (
-                            <TaskPlanCard plan={message.plan} activeStepId={message.activeStepId} />
-                          ) : null}
-                          <div className={`min-w-0 overflow-hidden ${message.isError ? "text-red-500 dark:text-red-400" : ""}`}>
-                            {message.isStreaming && !message.content ? (
-                              <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-zinc-200/70 bg-zinc-50/80 px-3 py-1.5 text-xs text-zinc-500 dark:border-zinc-800/70 dark:bg-zinc-950/50 dark:text-zinc-400">
-                                <div className="bounce-dots">
-                                  <span />
-                                  <span />
-                                  <span />
-                                </div>
-                                <span>{getStreamingStatusLabel(message)}</span>
-                              </div>
-                            ) : null}
-                            {message.role === "assistant" ? (
-                              <RichMessageContent content={message.content} isStreaming={message.isStreaming} />
-                            ) : (
-                              <MessageContent content={message.content} />
-                            )}
-                            {message.isStreaming && message.content && (
-                              <span className="inline-block h-4 w-0.5 bg-zinc-400 animate-pulse ml-0.5" />
-                            )}
-                          </div>
-                          {message.cards?.map((card, idx) => {
-                            if (card.type === "calendar_event" && isCalendarEventData(card.data)) {
-                              return (
-                                <CalendarEventCard
-                                  key={`${message.id}-card-${idx}`}
-                                  event={card.data}
-                                  actions={card.actions}
-                                />
-                              );
-                            }
-                            // Handle list of events
-                            if (
-                              card.type === "calendar_events_list" &&
-                              Array.isArray((card.data as { events?: unknown[] } | undefined)?.events)
-                            ) {
-                              const events = (card.data as { events: unknown[] }).events;
-                              return events
-                                .filter((event) => isCalendarEventData(event))
-                                .map((event, eventIdx: number) => (
-                                  <CalendarEventCard
-                                    key={`${message.id}-card-${idx}-event-${eventIdx}`}
-                                    event={event}
-                                    actions={["reschedule", "cancel"]}
-                                  />
-                                ));
-                            }
-                            if (card.type === "schedule_view") {
-                              const data = card.data as ScheduleViewCardPayload["data"] | undefined;
-                              if (data?.blocks?.length) {
-                                return (
-                                  <ScheduleViewCard
-                                    key={`${message.id}-card-${idx}`}
-                                    title={data.title || "Schedule"}
-                                    timeframe={data.timeframe || ""}
-                                    blocks={data.blocks as ScheduleBlock[]}
-                                  />
-                                );
-                              }
-                            }
-                            if (card.type === "data_table") {
-                              const data = card.data as DataTableCardPayload["data"] | undefined;
-                              if (data?.headers?.length && data?.rows?.length) {
-                                return (
-                                  <DataTableCard
-                                    key={`${message.id}-card-${idx}`}
-                                    title={data.title}
-                                    headers={data.headers}
-                                    rows={data.rows}
-                                  />
-                                );
-                              }
-                            }
-                            if (
-                              card.type === "comparison" ||
-                              card.type === "steps" ||
-                              card.type === "checklist"
-                            ) {
-                              return (
-                                <SmartCard
-                                  key={`${message.id}-card-${idx}`}
-                                  type={card.type}
-                                  data={card.data}
-                                  onAction={(msg) => void sendMessage(msg)}
-                                />
-                              );
-                            }
-                            return null;
-                          })}
-                          {message.role === "assistant" && message.confirmation?.pending && (
-                            <div className="flex flex-wrap gap-2">
-                              <Button
-                                type="button"
-                                size="sm"
-                                className="rounded-full"
-                                onClick={() => handleQuickReply("confirm")}
-                                disabled={isLoading}
-                              >
-                                Confirm
-                              </Button>
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                className="rounded-full"
-                                onClick={() => handleQuickReply("cancel")}
-                                disabled={isLoading}
-                              >
-                                Cancel
-                              </Button>
-                            </div>
-                          )}
-                        </div>
+                        <ChatMessageRow
+                          message={message}
+                          userName={user?.name}
+                          isLoading={isLoading}
+                          onQuickReply={handleQuickReply}
+                          onCopy={handleCopyMessage}
+                          onRegenerate={handleRegenerateMessage}
+                          onFeedback={handleMessageFeedback}
+                        />
                       </motion.div>
                     ))}
                   </AnimatePresence>
@@ -1559,36 +1346,6 @@ function truncatePreview(value: string, maxLength: number): string {
   }
 
   return `${normalized.slice(0, maxLength).trimEnd()}…`;
-}
-
-function getStreamingStatusLabel(message: Message): string {
-  if (message.backgroundJob?.status === "queued") {
-    return "Queued for background research...";
-  }
-
-  if (message.backgroundJob?.pending) {
-    return "Working in the background...";
-  }
-
-  const traces = message.traceEvents || [];
-
-  if (traces.some((trace) => trace.status === "running")) {
-    return "Running tools...";
-  }
-
-  if (traces.length > 0) {
-    return "Reviewing results...";
-  }
-
-  if (message.plan) {
-    return "Working through the plan...";
-  }
-
-  if ((message.thinkingEvents || []).length > 0) {
-    return "Thinking...";
-  }
-
-  return "Starting...";
 }
 
 function nextEventOrder(ref: MutableRefObject<number>): number {
