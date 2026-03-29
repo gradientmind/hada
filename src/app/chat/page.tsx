@@ -11,6 +11,7 @@ import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { ChatMessageRow } from "@/components/chat/chat-message-row";
 import type { TaskPlan } from "@/lib/types/database";
 import type { ChatCard } from "@/lib/types/cards";
+import type { StreamingSegment } from "@/components/chat/streaming-message";
 import { motion, AnimatePresence } from "framer-motion";
 import { LayoutDashboard, LogOut, Settings2 } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -44,10 +45,7 @@ interface Message {
     value?: "up" | "down";
     updated_at?: string;
   };
-  streamSegments?: Array<{
-    id: string;
-    text: string;
-  }>;
+  streamSegments?: StreamingSegment[];
   isError?: boolean;
   isStreaming?: boolean;
   created_at: string;
@@ -204,15 +202,13 @@ export default function ChatPage() {
     if (event.type === "text_delta" && typeof event.content === "string") {
       setIsThinking(false);
       const deltaText = event.content;
+      const segmentId = `${assistantMessageId}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
       updateMessage(assistantMessageId, (message) => ({
         ...message,
         content: message.content + deltaText,
         streamSegments: [
           ...(message.streamSegments || []),
-          {
-            id: `${assistantMessageId}-${Date.now()}-${(message.streamSegments || []).length}`,
-            text: deltaText,
-          },
+          { id: segmentId, text: deltaText },
         ],
       }));
       return;
