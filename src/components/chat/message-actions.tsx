@@ -1,4 +1,6 @@
-import { Copy, RefreshCcw, ThumbsDown, ThumbsUp } from "lucide-react";
+"use client";
+
+import { Check, Copy, RefreshCcw, ThumbsDown, ThumbsUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export function MessageActions(props: {
@@ -15,9 +17,10 @@ export function MessageActions(props: {
         size="icon-xs"
         variant="ghost"
         aria-label="Copy"
+        data-active={props.copied}
         onClick={props.onCopy}
       >
-        <Copy className="h-3.5 w-3.5" />
+        {props.copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
       </Button>
       <Button
         type="button"

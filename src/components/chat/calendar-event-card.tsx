@@ -3,19 +3,10 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Calendar, MapPin, Users, Video } from "lucide-react";
+import type { CalendarEventCardData } from "@/lib/types/cards";
 
 export interface CalendarEventCardProps {
-  event: {
-    id: string;
-    summary: string;
-    description?: string;
-    start: string; // ISO 8601 datetime
-    end: string; // ISO 8601 datetime
-    location?: string;
-    attendees?: string[];
-    htmlLink?: string;
-    hangoutLink?: string;
-  };
+  event: CalendarEventCardData;
   actions?: string[]; // e.g., ['reschedule', 'cancel', 'join']
   onAction?: (action: string, eventId: string) => void;
 }

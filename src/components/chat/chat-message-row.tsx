@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { CalendarEventCard, type CalendarEventCardProps } from "@/components/chat/calendar-event-card";
+import { CalendarEventCard } from "@/components/chat/calendar-event-card";
 import { DataTableCard } from "@/components/chat/data-table-card";
 import { SmartCard } from "@/components/chat/smart-cards";
 import { RichMessageContent } from "@/components/chat/rich-message-content";
@@ -14,38 +14,16 @@ import { MessageActions } from "@/components/chat/message-actions";
 import { FollowUpChips } from "@/components/chat/follow-up-chips";
 import type { TaskPlan } from "@/lib/types/database";
 import type {
+  CalendarEventCardData,
+  CalendarEventCardPayload,
+  CalendarEventsListPayload,
+  ChatCard,
   DataTableCardPayload,
-  RichCard,
   ScheduleBlock,
   ScheduleViewCardPayload,
 } from "@/lib/types/cards";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-
-type CalendarEventCardData = CalendarEventCardProps["event"];
-
-interface CalendarEventCardPayload {
-  type: "calendar_event";
-  data?: CalendarEventCardData;
-  actions?: string[];
-}
-
-interface CalendarEventsListPayload {
-  type: "calendar_events_list";
-  data?: {
-    events?: CalendarEventCardData[];
-  };
-}
-
-type ChatCard =
-  | CalendarEventCardPayload
-  | CalendarEventsListPayload
-  | RichCard
-  | {
-      type?: string;
-      data?: unknown;
-      actions?: string[];
-    };
 
 export interface ChatMessageRowMessage {
   id: string;

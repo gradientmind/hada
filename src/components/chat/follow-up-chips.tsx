@@ -1,3 +1,5 @@
+"use client";
+
 export function FollowUpChips(props: {
   suggestions: string[];
   disabled?: boolean;

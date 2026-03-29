@@ -1,3 +1,28 @@
+export interface CalendarEventCardData {
+  id: string;
+  summary: string;
+  description?: string;
+  start: string; // ISO 8601 datetime
+  end: string; // ISO 8601 datetime
+  location?: string;
+  attendees?: string[];
+  htmlLink?: string;
+  hangoutLink?: string;
+}
+
+export interface CalendarEventCardPayload {
+  type: "calendar_event";
+  data?: CalendarEventCardData;
+  actions?: string[];
+}
+
+export interface CalendarEventsListPayload {
+  type: "calendar_events_list";
+  data?: {
+    events?: CalendarEventCardData[];
+  };
+}
+
 export interface SearchResultItem {
   title: string;
   url: string;
@@ -106,3 +131,13 @@ export type RichCard =
   | DataTableCardPayload
   | LinkPreviewCardPayload
   | SmartCard;
+
+export type ChatCard =
+  | CalendarEventCardPayload
+  | CalendarEventsListPayload
+  | RichCard
+  | {
+      type?: string;
+      data?: unknown;
+      actions?: string[];
+    };

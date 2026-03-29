@@ -6,12 +6,11 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { createClient } from "@/lib/supabase/client";
 import { useHealthStatus } from "@/lib/hooks/use-health-status";
-import { type CalendarEventCardProps } from "@/components/chat/calendar-event-card";
 import { type TraceEvent, type ThinkingEvent } from "@/components/chat/agent-trace";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { ChatMessageRow } from "@/components/chat/chat-message-row";
 import type { TaskPlan } from "@/lib/types/database";
-import type { RichCard } from "@/lib/types/cards";
+import type { ChatCard } from "@/lib/types/cards";
 import { motion, AnimatePresence } from "framer-motion";
 import { LayoutDashboard, LogOut, Settings2 } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -109,31 +108,6 @@ interface BackgroundJobPollResponse {
   } | null;
   error?: string;
 }
-
-type CalendarEventCardData = CalendarEventCardProps["event"];
-
-interface CalendarEventCardPayload {
-  type: "calendar_event";
-  data?: CalendarEventCardData;
-  actions?: string[];
-}
-
-interface CalendarEventsListPayload {
-  type: "calendar_events_list";
-  data?: {
-    events?: CalendarEventCardData[];
-  };
-}
-
-type ChatCard =
-  | CalendarEventCardPayload
-  | CalendarEventsListPayload
-  | RichCard
-  | {
-      type?: string;
-      data?: unknown;
-      actions?: string[];
-    };
 
 export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
