@@ -233,7 +233,7 @@ function TraceTimeline({
   thinking: ThinkingEvent[];
   isStreaming?: boolean;
 }) {
-  const [collapsed, setCollapsed] = useState(isStreaming !== true);
+  const [collapsed, setCollapsed] = useState(true);
 
   // Build summary label
   const thinkingCount = thinking.length;

@@ -8,6 +8,8 @@ import { DataTableCard } from "@/components/chat/data-table-card";
 import { SmartCard } from "@/components/chat/smart-cards";
 import { RichMessageContent } from "@/components/chat/rich-message-content";
 import { AgentTraceTimeline, type TraceEvent, type ThinkingEvent } from "@/components/chat/agent-trace";
+import { buildToolStatusPills } from "@/lib/chat/tool-status";
+import { ToolStatusPills } from "@/components/chat/tool-status-pills";
 import { ScheduleViewCard } from "@/components/chat/schedule-view-card";
 import { TaskPlanCard } from "@/components/chat/task-plan-card";
 import { MessageActions } from "@/components/chat/message-actions";
@@ -85,35 +87,6 @@ function isCalendarEventData(value: unknown): value is CalendarEventCardData {
   );
 }
 
-function getStreamingStatusLabel(message: ChatMessageRowMessage): string {
-  if (message.backgroundJob?.status === "queued") {
-    return "Queued for background research...";
-  }
-
-  if (message.backgroundJob?.pending) {
-    return "Working in the background...";
-  }
-
-  const traces = message.traceEvents || [];
-
-  if (traces.some((trace) => trace.status === "running")) {
-    return "Running tools...";
-  }
-
-  if (traces.length > 0) {
-    return "Reviewing results...";
-  }
-
-  if (message.plan) {
-    return "Working through the plan...";
-  }
-
-  if ((message.thinkingEvents || []).length > 0) {
-    return "Thinking...";
-  }
-
-  return "Starting...";
-}
 
 function UserMessageContent({ content }: { content: string }) {
   return (
@@ -215,6 +188,14 @@ export function ChatMessageRow({
   const [copied, setCopied] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
 
+  const pills = buildToolStatusPills({
+    isStreaming: message.isStreaming ?? false,
+    traces: message.traceEvents ?? [],
+    thinkingCount: message.thinkingEvents?.length ?? 0,
+    hasVisibleContent: (message.content?.length ?? 0) > 0,
+    backgroundJobPending: message.backgroundJob?.pending ?? false,
+  });
+
   const handleCopy = async () => {
     await onCopy(message.id, message.content);
     setCopied(true);
@@ -279,14 +260,14 @@ export function ChatMessageRow({
         <div
           className={`min-w-0 overflow-hidden ${message.isError ? "text-red-500 dark:text-red-400" : ""}`}
         >
-          {message.isStreaming && !message.content ? (
+          {message.isStreaming && !message.content && pills.length === 0 ? (
             <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-zinc-200/70 bg-zinc-50/80 px-3 py-1.5 text-xs text-zinc-500 dark:border-zinc-800/70 dark:bg-zinc-950/50 dark:text-zinc-400">
               <div className="bounce-dots">
                 <span />
                 <span />
                 <span />
               </div>
-              <span>{getStreamingStatusLabel(message)}</span>
+              <span>Starting…</span>
             </div>
           ) : null}
           {message.role === "assistant" ? (
@@ -393,7 +374,10 @@ export function ChatMessageRow({
           </div>
         )}
 
-        {/* Status pills area — placeholder for Task 8 */}
+        {/* Status pills */}
+        {message.role === "assistant" && message.isStreaming && pills.length > 0 ? (
+          <ToolStatusPills pills={pills} />
+        ) : null}
 
         {/* Message actions hover toolbar */}
         {showActions && (
