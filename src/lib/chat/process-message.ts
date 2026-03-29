@@ -3,6 +3,7 @@ import { agentLoop } from "@/lib/chat/agent-loop";
 import { extractCardsFromToolResults } from "@/lib/chat/card-extraction";
 import { buildSystemPrompt } from "@/lib/chat/build-system-prompt";
 import { assembleConversationContext, maybeCompactConversation } from "@/lib/chat/context-manager";
+import { generateFollowUpSuggestions } from "@/lib/chat/follow-up-suggestions";
 import { extractMemoriesFromTurn } from "@/lib/chat/memory-extraction";
 import { resolveProviderSelection } from "@/lib/chat/providers";
 import { resolveRunBudget } from "@/lib/chat/runtime-budgets";
@@ -155,10 +156,18 @@ export async function processMessage(options: ProcessMessageOptions): Promise<Pr
     }
     responseText = assembled.trim() || fatalError || "I ran into an issue while processing that.";
     const cards = extractCardsFromToolResults(toolResultsForCards);
+    const followUpSuggestions = fatalError
+      ? []
+      : await generateFollowUpSuggestions({
+          provider,
+          userMessage: options.message,
+          assistantResponse: responseText,
+        }).catch(() => []);
     const assistantMetadata: MessageMetadata = {
       source: options.source,
       runId,
       ...(cards.length ? { cards } : {}),
+      ...(followUpSuggestions.length ? { followUpSuggestions } : {}),
       ...(options.backgroundJobId
         ? {
             backgroundJob: {
