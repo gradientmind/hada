@@ -669,6 +669,169 @@ export default function ChatPage() {
     };
   }, []);
 
+  /**
+   * Reads an SSE response stream and applies agent events to a given assistant message.
+   * For sendMessage, `assistantMessageId` starts as a temp ID and is updated to the real
+   * ID once a `complete` or `background_job` event arrives. For regeneration, the caller
+   * passes the existing real message ID and the ID update logic still applies if the server
+   * returns a fresh ID in the event.
+   *
+   * @param response - The fetch Response from /api/chat
+   * @param assistantMessageId - The current message ID to target (may be a temp ID)
+   * @param userMessageId - The current user message ID (may be a temp ID, or null for regen)
+   */
+  const processChatStream = useCallback(async (
+    response: Response,
+    assistantMessageId: string,
+    userMessageId: string | null,
+  ) => {
+    if (!response.ok || !response.body) {
+      const errData = await response.json().catch(() => ({})) as Record<string, unknown>;
+      throw new Error(String(errData.error ?? `Request failed: ${response.status}`));
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let receivedTerminalEvent = false;
+    // Track the current assistant message ID in case it changes from temp → real
+    let currentAssistantId = assistantMessageId;
+    eventOrderRef.current = 0;
+
+    const processStreamEvent = (event: Record<string, unknown>) => {
+      if (event.type === "complete") {
+        receivedTerminalEvent = true;
+        const realAssistantId = String(event.id ?? currentAssistantId);
+        setMessages((prev) =>
+          prev.map((msg) => {
+            if (userMessageId && msg.id === userMessageId) {
+              return { ...msg, id: String(event.userMessageId ?? userMessageId) };
+            }
+            if (msg.id === currentAssistantId) {
+              return {
+                ...msg,
+                id: realAssistantId,
+                cards: Array.isArray(event.cards) ? (event.cards as ChatCard[]) : msg.cards,
+                followUpSuggestions: Array.isArray(event.followUpSuggestions)
+                  ? (event.followUpSuggestions as string[]).filter((v): v is string => typeof v === "string")
+                  : msg.followUpSuggestions,
+                isStreaming: false,
+                isError: !!event.isError,
+                backgroundJob: undefined,
+                streamSegments: undefined,
+              };
+            }
+            return msg;
+          }),
+        );
+        currentAssistantId = realAssistantId;
+      } else if (event.type === "error") {
+        receivedTerminalEvent = true;
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === currentAssistantId
+              ? {
+                  ...msg,
+                  content: String(event.message ?? "Sorry, I encountered an error."),
+                  isStreaming: false,
+                  isError: true,
+                  streamSegments: undefined,
+                }
+              : msg,
+          ),
+        );
+      } else if (event.type === "background_job") {
+        receivedTerminalEvent = true;
+        const realAssistantId = String(event.assistantMessageId ?? currentAssistantId);
+        const jobId = String(event.jobId ?? "");
+
+        setMessages((prev) =>
+          prev.map((msg) => {
+            if (userMessageId && msg.id === userMessageId) {
+              return { ...msg, id: String(event.userMessageId ?? userMessageId) };
+            }
+            if (msg.id === currentAssistantId) {
+              return {
+                ...msg,
+                id: realAssistantId,
+                backgroundJob: jobId
+                  ? {
+                      id: jobId,
+                      status: "queued" as const,
+                      pending: true,
+                    }
+                  : undefined,
+                isStreaming: true,
+              };
+            }
+            return msg;
+          }),
+        );
+        currentAssistantId = realAssistantId;
+
+        if (jobId) {
+          ensureBackgroundJobPolling(jobId, realAssistantId);
+        }
+      } else {
+        applyAgentEventToMessage(currentAssistantId, event);
+      }
+    };
+
+    const processBufferedLines = (chunk: string) => {
+      buffer += chunk;
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+
+      for (const line of lines) {
+        if (!line.startsWith("data: ")) continue;
+
+        let event: Record<string, unknown>;
+        try {
+          event = JSON.parse(line.slice(6)) as Record<string, unknown>;
+        } catch {
+          continue;
+        }
+
+        processStreamEvent(event);
+      }
+    };
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        processBufferedLines(decoder.decode());
+        if (buffer.startsWith("data: ")) {
+          try {
+            processStreamEvent(JSON.parse(buffer.slice(6)) as Record<string, unknown>);
+          } catch {
+            // Ignore malformed trailing data.
+          }
+        }
+        break;
+      }
+
+      processBufferedLines(decoder.decode(value, { stream: true }));
+    }
+
+    if (!receivedTerminalEvent) {
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === currentAssistantId
+            ? {
+                ...msg,
+                content: msg.content.trim()
+                  ? `${msg.content}\n\nResponse interrupted before completion. Please try again.`
+                  : "Response interrupted before completion. Please try again.",
+                isStreaming: false,
+                isError: true,
+                streamSegments: undefined,
+              }
+            : msg,
+        ),
+      );
+    }
+  }, [applyAgentEventToMessage, ensureBackgroundJobPolling]);
+
   const sendMessage = async (overrideMessage?: string) => {
     const messageText = overrideMessage ?? input;
     if (!messageText.trim() || isLoading) return;
@@ -704,142 +867,7 @@ export default function ChatPage() {
         body: JSON.stringify({ message: messageText.trim() }),
       });
 
-      if (!response.ok || !response.body) {
-        const errData = await response.json().catch(() => ({})) as Record<string, unknown>;
-        throw new Error(String(errData.error ?? `Request failed: ${response.status}`));
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let receivedTerminalEvent = false;
-      eventOrderRef.current = 0;
-
-      const processStreamEvent = (event: Record<string, unknown>) => {
-        if (event.type === "complete") {
-          receivedTerminalEvent = true;
-          const realAssistantId = String(event.id ?? tempAssistantId);
-          const realUserId = String(event.userMessageId ?? tempUserId);
-          setMessages((prev) =>
-            prev.map((msg) => {
-              if (msg.id === tempUserId) return { ...msg, id: realUserId };
-              if (msg.id === tempAssistantId) {
-                return {
-                  ...msg,
-                  id: realAssistantId,
-                  cards: Array.isArray(event.cards) ? (event.cards as ChatCard[]) : msg.cards,
-                  isStreaming: false,
-                  isError: !!event.isError,
-                  backgroundJob: undefined,
-                  streamSegments: undefined,
-                };
-              }
-              return msg;
-            }),
-          );
-        } else if (event.type === "error") {
-          receivedTerminalEvent = true;
-          setMessages((prev) =>
-            prev.map((msg) =>
-              msg.id === tempAssistantId
-                ? {
-                    ...msg,
-                    content: String(event.message ?? "Sorry, I encountered an error."),
-                    isStreaming: false,
-                    isError: true,
-                    streamSegments: undefined,
-                  }
-                : msg,
-            ),
-          );
-        } else if (event.type === "background_job") {
-          receivedTerminalEvent = true;
-          const realAssistantId = String(event.assistantMessageId ?? tempAssistantId);
-          const realUserId = String(event.userMessageId ?? tempUserId);
-          const jobId = String(event.jobId ?? "");
-
-          setMessages((prev) =>
-            prev.map((msg) => {
-              if (msg.id === tempUserId) return { ...msg, id: realUserId };
-              if (msg.id === tempAssistantId) {
-                return {
-                  ...msg,
-                  id: realAssistantId,
-                  backgroundJob: jobId
-                    ? {
-                        id: jobId,
-                        status: "queued",
-                        pending: true,
-                      }
-                    : undefined,
-                  isStreaming: true,
-                };
-              }
-              return msg;
-            }),
-          );
-
-          if (jobId) {
-            ensureBackgroundJobPolling(jobId, realAssistantId);
-          }
-        } else {
-          applyAgentEventToMessage(tempAssistantId, event);
-        }
-      };
-
-      const processBufferedLines = (chunk: string) => {
-        buffer += chunk;
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-
-          let event: Record<string, unknown>;
-          try {
-            event = JSON.parse(line.slice(6)) as Record<string, unknown>;
-          } catch {
-            continue;
-          }
-
-          processStreamEvent(event);
-        }
-      };
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) {
-          processBufferedLines(decoder.decode());
-          if (buffer.startsWith("data: ")) {
-            try {
-              processStreamEvent(JSON.parse(buffer.slice(6)) as Record<string, unknown>);
-            } catch {
-              // Ignore malformed trailing data.
-            }
-          }
-          break;
-        }
-
-        processBufferedLines(decoder.decode(value, { stream: true }));
-      }
-
-      if (!receivedTerminalEvent) {
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.id === tempAssistantId
-              ? {
-                  ...msg,
-                  content: msg.content.trim()
-                    ? `${msg.content}\n\nResponse interrupted before completion. Please try again.`
-                    : "Response interrupted before completion. Please try again.",
-                  isStreaming: false,
-                  isError: true,
-                  streamSegments: undefined,
-                }
-              : msg,
-          ),
-        );
-      }
+      await processChatStream(response, tempAssistantId, tempUserId);
     } catch (error) {
       console.error("Chat error:", error);
       setMessages((prev) =>
@@ -876,11 +904,50 @@ export default function ChatPage() {
   };
 
   const handleRegenerateMessage = async (assistantMessageId: string) => {
-    await fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ regenerateAssistantMessageId: assistantMessageId }),
-    });
+    if (isLoading) return;
+
+    // Reset the existing assistant message to a clean streaming state
+    updateMessage(assistantMessageId, (message) => ({
+      ...message,
+      isStreaming: true,
+      isError: false,
+      followUpSuggestions: undefined,
+      feedback: undefined,
+      traceEvents: [],
+      thinkingEvents: [],
+      plan: undefined,
+      activeStepId: undefined,
+      content: "",
+      streamSegments: [],
+    }));
+
+    setIsLoading(true);
+    setIsThinking(true);
+
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ regenerateAssistantMessageId: assistantMessageId }),
+      });
+
+      // No user message ID to update for regeneration — pass null
+      await processChatStream(response, assistantMessageId, null);
+    } catch (error) {
+      console.error("Regenerate error:", error);
+      updateMessage(assistantMessageId, (message) => ({
+        ...message,
+        content: error instanceof Error
+          ? error.message
+          : "Sorry, I'm having trouble connecting. Please try again.",
+        isStreaming: false,
+        isError: true,
+        streamSegments: undefined,
+      }));
+    } finally {
+      setIsLoading(false);
+      setIsThinking(false);
+    }
   };
 
   const handleMessageFeedback = async (assistantMessageId: string, value: "up" | "down") => {
