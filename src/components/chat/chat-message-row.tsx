@@ -19,7 +19,6 @@ import type { TaskPlan } from "@/lib/types/database";
 import type {
   CalendarEventCardData,
   CalendarEventCardPayload,
-  CalendarEventsListPayload,
   ChatCard,
   DataTableCardPayload,
   ScheduleBlock,
