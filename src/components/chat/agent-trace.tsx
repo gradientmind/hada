@@ -17,24 +17,9 @@ import {
   XCircle,
   AlertTriangle,
 } from "lucide-react";
+import type { TraceEvent, ThinkingEvent } from "@/lib/chat/types";
 
-export interface TraceEvent {
-  callId: string;
-  name: string;
-  args: Record<string, unknown>;
-  result?: string;
-  durationMs?: number;
-  truncated?: boolean;
-  agentName?: string;
-  order?: number;
-  status: "running" | "done" | "error";
-}
-
-export interface ThinkingEvent {
-  content: string;
-  agentName?: string;
-  order?: number;
-}
+export type { TraceEvent, ThinkingEvent };
 
 const TOOL_META: Record<string, { icon: typeof Search; label: string; color: string }> = {
   web_search: { icon: Search, label: "Web Search", color: "text-blue-500" },

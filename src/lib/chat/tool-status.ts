@@ -1,6 +1,8 @@
+import type { TraceEvent } from "@/lib/chat/types";
+
 export interface ToolStatusInput {
   isStreaming: boolean;
-  traces: Array<{ name: string; status: "running" | "done" | "error" }>;
+  traces: TraceEvent[];
   thinkingCount: number;
   hasVisibleContent: boolean;
   backgroundJobPending: boolean;
