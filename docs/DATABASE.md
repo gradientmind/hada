@@ -54,8 +54,8 @@ Example `settings` payload:
 
 ```json
 {
-  "llm_provider": "minimax",
-  "llm_model": "MiniMax-M2.1",
+  "llm_provider": "openrouter",
+  "llm_model": "minimax/minimax-m2.7",
   "timezone": "America/New_York",
   "persona": "concise",
   "custom_instructions": "Always respond in Korean when I write in Korean."

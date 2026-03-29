@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/client";
 import { PERSONAS } from "@/lib/chat/personas";
 import type { LLMProviderName, UserSettings } from "@/lib/types/database";
+import type { OpenRouterModelOption } from "@/lib/openrouter/models";
 
 interface UserProfile {
   id: string;
@@ -29,11 +30,21 @@ const PROVIDER_OPTIONS: Array<{ value: LLMProviderName; label: string }> = [
   { value: "groq", label: "Groq" },
 ];
 
+interface OpenRouterModelsApiResponse {
+  models?: OpenRouterModelOption[];
+  error?: string;
+}
+
 export function AccountTab() {
   const supabase = createClient();
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [provider, setProvider] = useState<LLMProviderName>("minimax");
+  const [provider, setProvider] = useState<LLMProviderName>("openrouter");
   const [model, setModel] = useState("");
+  const [openRouterQuery, setOpenRouterQuery] = useState("");
+  const [openRouterModels, setOpenRouterModels] = useState<OpenRouterModelOption[]>([]);
+  const [loadingOpenRouterModels, setLoadingOpenRouterModels] = useState(false);
+  const [openRouterModelsError, setOpenRouterModelsError] = useState<string | null>(null);
+  const [openRouterPickerOpen, setOpenRouterPickerOpen] = useState(false);
   const [timezone, setTimezone] = useState("");
   const [persona, setPersona] = useState<string>("default");
   const [customInstructions, setCustomInstructions] = useState<string>("");
@@ -81,8 +92,11 @@ export function AccountTab() {
       };
 
       setProfile(loaded);
-      setProvider((loaded.settings.llm_provider as LLMProviderName) || "minimax");
-      setModel(typeof loaded.settings.llm_model === "string" ? loaded.settings.llm_model : "");
+      const loadedProvider = (loaded.settings.llm_provider as LLMProviderName) || "openrouter";
+      const loadedModel = typeof loaded.settings.llm_model === "string" ? loaded.settings.llm_model : "";
+      setProvider(loadedProvider);
+      setModel(loadedModel);
+      setOpenRouterQuery(loadedModel);
       setTimezone(typeof loaded.settings.timezone === "string" ? loaded.settings.timezone : "");
       setPersona(typeof loaded.settings.persona === "string" ? loaded.settings.persona : "default");
       setCustomInstructions(typeof loaded.settings.custom_instructions === "string" ? loaded.settings.custom_instructions : "");
@@ -90,6 +104,76 @@ export function AccountTab() {
 
     void loadProfile();
   }, [supabase]);
+
+  useEffect(() => {
+    if (!isAdmin || provider !== "openrouter") {
+      return;
+    }
+
+    let active = true;
+    const loadOpenRouterModels = async () => {
+      setLoadingOpenRouterModels(true);
+      setOpenRouterModelsError(null);
+
+      try {
+        const response = await fetch("/api/openrouter/models", {
+          cache: "no-store",
+        });
+
+        const payload = (await response.json().catch(() => ({}))) as OpenRouterModelsApiResponse;
+        if (!response.ok) {
+          throw new Error(payload.error || "Failed to load OpenRouter models.");
+        }
+
+        if (!active) {
+          return;
+        }
+
+        setOpenRouterModels(Array.isArray(payload.models) ? payload.models : []);
+      } catch (error) {
+        if (!active) {
+          return;
+        }
+
+        setOpenRouterModels([]);
+        setOpenRouterModelsError(error instanceof Error ? error.message : "Failed to load OpenRouter models.");
+      } finally {
+        if (active) {
+          setLoadingOpenRouterModels(false);
+        }
+      }
+    };
+
+    void loadOpenRouterModels();
+
+    return () => {
+      active = false;
+    };
+  }, [isAdmin, provider]);
+
+  function handleProviderChange(nextProvider: LLMProviderName) {
+    setProvider(nextProvider);
+    if (nextProvider === "openrouter") {
+      setOpenRouterQuery(model);
+      return;
+    }
+
+    setOpenRouterPickerOpen(false);
+    setOpenRouterQuery("");
+    setModel("");
+  }
+
+  const normalizedOpenRouterQuery = openRouterQuery.trim().toLowerCase();
+  const filteredOpenRouterModels = openRouterModels
+    .filter((option) => {
+      if (!normalizedOpenRouterQuery) {
+        return true;
+      }
+
+      const haystack = `${option.id} ${option.name}`.toLowerCase();
+      return haystack.includes(normalizedOpenRouterQuery);
+    })
+    .slice(0, 60);
 
   async function saveSettings() {
     if (!profile) return;
@@ -236,7 +320,7 @@ export function AccountTab() {
                 <select
                   className="h-10 w-full rounded-md border border-zinc-200 bg-transparent px-3 text-sm outline-none focus:border-zinc-400 dark:border-zinc-800 dark:focus:border-zinc-600"
                   value={provider}
-                  onChange={(event) => setProvider(event.target.value as LLMProviderName)}
+                  onChange={(event) => handleProviderChange(event.target.value as LLMProviderName)}
                 >
                   {PROVIDER_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>
@@ -245,14 +329,88 @@ export function AccountTab() {
                   ))}
                 </select>
               </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Model (optional override)</label>
-                <Input
-                  value={model}
-                  onChange={(event) => setModel(event.target.value)}
-                  placeholder="Leave blank for provider default"
-                />
-              </div>
+              {provider === "openrouter" ? (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Model (OpenRouter)</label>
+                  <div className="relative">
+                    <Input
+                      value={openRouterQuery}
+                      onFocus={() => setOpenRouterPickerOpen(true)}
+                      onBlur={() => {
+                        window.setTimeout(() => setOpenRouterPickerOpen(false), 120);
+                      }}
+                      onChange={(event) => {
+                        const nextValue = event.target.value;
+                        setOpenRouterQuery(nextValue);
+                        setModel(nextValue.trim());
+                        setOpenRouterPickerOpen(true);
+                      }}
+                      placeholder={loadingOpenRouterModels ? "Loading OpenRouter models..." : "Search OpenRouter models"}
+                    />
+                    {openRouterPickerOpen && (
+                      <div className="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-md border border-zinc-200 bg-white p-1 shadow-lg dark:border-zinc-800 dark:bg-zinc-900">
+                        <button
+                          type="button"
+                          className={`w-full rounded px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800 ${
+                            model ? "text-zinc-700 dark:text-zinc-300" : "bg-zinc-100 dark:bg-zinc-800"
+                          }`}
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => {
+                            setModel("");
+                            setOpenRouterQuery("");
+                            setOpenRouterPickerOpen(false);
+                          }}
+                        >
+                          Use OpenRouter provider default model
+                        </button>
+                        {filteredOpenRouterModels.map((option) => (
+                          <button
+                            key={option.id}
+                            type="button"
+                            className={`w-full rounded px-3 py-2 text-left hover:bg-zinc-100 dark:hover:bg-zinc-800 ${
+                              model === option.id ? "bg-zinc-100 dark:bg-zinc-800" : ""
+                            }`}
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={() => {
+                              setModel(option.id);
+                              setOpenRouterQuery(option.id);
+                              setOpenRouterPickerOpen(false);
+                            }}
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="text-sm font-medium">{option.name}</span>
+                              <span className="font-mono text-xs text-zinc-500 dark:text-zinc-400">
+                                {option.priceSummary}
+                              </span>
+                            </div>
+                            <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">{option.id}</p>
+                          </button>
+                        ))}
+                        {!loadingOpenRouterModels && filteredOpenRouterModels.length === 0 && (
+                          <p className="px-3 py-2 text-xs text-zinc-500 dark:text-zinc-400">No models found.</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                    {openRouterModelsError
+                      ? `Could not load model pricing: ${openRouterModelsError}`
+                      : "Search and pick an OpenRouter model. Leave blank to use the provider default."}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Model</label>
+                  <Input
+                    value={model}
+                    onChange={(event) => setModel(event.target.value)}
+                    placeholder="Enter model ID"
+                  />
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                    For this provider, enter the model manually.
+                  </p>
+                </div>
+              )}
             </>
           )}
           <div className="space-y-2">
