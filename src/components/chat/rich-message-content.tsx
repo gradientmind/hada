@@ -10,7 +10,7 @@ interface RichMessageContentProps {
 
 export function RichMessageContent({ content }: RichMessageContentProps) {
   return (
-    <div className="min-w-0 w-full max-w-full overflow-hidden text-sm leading-relaxed space-y-1 [overflow-wrap:anywhere] [&>*]:min-w-0 [&>*:last-child]:mb-0">
+    <div className="min-w-0 w-full max-w-full text-sm leading-relaxed space-y-1 [overflow-wrap:anywhere] [&>*]:min-w-0 [&>*:last-child]:mb-0">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{

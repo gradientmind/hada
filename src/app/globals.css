@@ -121,9 +121,17 @@ html[data-theme="light"] {
   * {
     @apply border-border outline-ring/50;
   }
+  html {
+    overflow-x: hidden;
+  }
   body {
     @apply bg-background text-foreground;
     overflow-x: hidden;
+  }
+  /* Prevent Radix ScrollArea viewport from allowing horizontal scroll.
+     Radix sets overflow:scroll as an inline style, so !important is required. */
+  [data-radix-scroll-area-viewport] {
+    overflow-x: hidden !important;
   }
   h1,
   h2,
