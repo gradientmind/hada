@@ -567,6 +567,7 @@ function EditorPane({
 }) {
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
+      {/* Toolbar */}
       <div className="flex shrink-0 items-center justify-between border-b border-zinc-200/60 px-4 py-2.5 dark:border-zinc-800/60">
         <div className="flex flex-1 items-center gap-2 min-w-0">
           <input
@@ -594,13 +595,39 @@ function EditorPane({
         </div>
       </div>
 
-      <textarea
-        value={content}
-        onChange={(e) => onContentChange(e.target.value)}
-        placeholder="Write in markdown..."
-        className="flex-1 resize-none bg-transparent px-5 py-5 font-mono text-sm leading-relaxed text-zinc-800 outline-none placeholder:text-zinc-400 dark:text-zinc-200 sm:px-8"
-        spellCheck={false}
-      />
+      {/* Split pane: editor left, live preview right */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Raw editor */}
+        <div className="flex flex-1 flex-col border-r border-zinc-200/60 dark:border-zinc-800/60">
+          <div className="border-b border-zinc-200/40 px-4 py-1.5 dark:border-zinc-800/40">
+            <span className="text-[10px] font-medium uppercase tracking-widest text-zinc-400">Markdown</span>
+          </div>
+          <textarea
+            autoFocus
+            value={content}
+            onChange={(e) => onContentChange(e.target.value)}
+            placeholder="Write in markdown..."
+            className="flex-1 resize-none bg-transparent px-4 py-4 font-mono text-sm leading-relaxed text-zinc-800 outline-none placeholder:text-zinc-400 dark:text-zinc-200"
+            spellCheck={false}
+          />
+        </div>
+
+        {/* Live preview */}
+        <div className="hidden flex-1 flex-col overflow-y-auto sm:flex">
+          <div className="border-b border-zinc-200/40 px-5 py-1.5 dark:border-zinc-800/40">
+            <span className="text-[10px] font-medium uppercase tracking-widest text-zinc-400">Preview</span>
+          </div>
+          <div className="px-5 py-4">
+            {content ? (
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                {content}
+              </ReactMarkdown>
+            ) : (
+              <p className="text-sm italic text-zinc-400">Preview will appear here...</p>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
