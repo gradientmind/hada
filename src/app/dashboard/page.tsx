@@ -3,7 +3,7 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -465,6 +465,41 @@ function DocItem({
   );
 }
 
+const markdownComponents: React.ComponentProps<typeof ReactMarkdown>["components"] = {
+  h1: ({ children }) => <h1 className="mb-3 mt-6 text-2xl font-bold text-zinc-900 dark:text-zinc-50 first:mt-0">{children}</h1>,
+  h2: ({ children }) => <h2 className="mb-2 mt-5 text-xl font-semibold text-zinc-900 dark:text-zinc-50">{children}</h2>,
+  h3: ({ children }) => <h3 className="mb-2 mt-4 text-lg font-semibold text-zinc-800 dark:text-zinc-100">{children}</h3>,
+  h4: ({ children }) => <h4 className="mb-1 mt-3 text-base font-semibold text-zinc-800 dark:text-zinc-100">{children}</h4>,
+  p: ({ children }) => <p className="mb-3 leading-relaxed text-zinc-700 dark:text-zinc-300">{children}</p>,
+  strong: ({ children }) => <strong className="font-semibold text-zinc-900 dark:text-zinc-50">{children}</strong>,
+  em: ({ children }) => <em className="italic text-zinc-700 dark:text-zinc-300">{children}</em>,
+  ul: ({ children }) => <ul className="mb-3 ml-5 list-disc space-y-1 text-zinc-700 dark:text-zinc-300">{children}</ul>,
+  ol: ({ children }) => <ol className="mb-3 ml-5 list-decimal space-y-1 text-zinc-700 dark:text-zinc-300">{children}</ol>,
+  li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+  blockquote: ({ children }) => <blockquote className="mb-3 border-l-2 border-teal-400 pl-4 italic text-zinc-500 dark:text-zinc-400">{children}</blockquote>,
+  hr: () => <hr className="my-5 border-zinc-200 dark:border-zinc-800" />,
+  code: ({ children, className }) => {
+    const isBlock = className?.includes("language-");
+    if (isBlock) {
+      return (
+        <pre className="mb-4 overflow-x-auto rounded-xl bg-zinc-100 px-4 py-3 dark:bg-zinc-800">
+          <code className={`text-sm font-mono text-zinc-800 dark:text-zinc-200 ${className ?? ""}`}>{children}</code>
+        </pre>
+      );
+    }
+    return <code className="rounded bg-zinc-100 px-1.5 py-0.5 font-mono text-[0.85em] text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200">{children}</code>;
+  },
+  table: ({ children }) => (
+    <div className="mb-4 overflow-x-auto">
+      <table className="w-full border-collapse text-sm">{children}</table>
+    </div>
+  ),
+  thead: ({ children }) => <thead className="bg-zinc-100 dark:bg-zinc-800">{children}</thead>,
+  th: ({ children }) => <th className="border border-zinc-200 px-3 py-2 text-left font-semibold text-zinc-800 dark:border-zinc-700 dark:text-zinc-100">{children}</th>,
+  td: ({ children }) => <td className="border border-zinc-200 px-3 py-2 text-zinc-700 dark:border-zinc-700 dark:text-zinc-300">{children}</td>,
+  a: ({ href, children }) => <a href={href} className="text-teal-600 underline hover:text-teal-700 dark:text-teal-400" target="_blank" rel="noopener noreferrer">{children}</a>,
+};
+
 function ViewPane({
   doc,
   onEdit,
@@ -498,9 +533,7 @@ function ViewPane({
 
       <div className="flex-1 overflow-y-auto px-5 py-5 sm:px-8">
         {doc.content ? (
-          <div className="prose prose-zinc max-w-none dark:prose-invert prose-headings:font-semibold prose-code:rounded prose-code:bg-zinc-100 prose-code:px-1 prose-code:py-0.5 prose-code:text-[0.85em] dark:prose-code:bg-zinc-800">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{doc.content}</ReactMarkdown>
-          </div>
+          <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{doc.content}</ReactMarkdown>
         ) : (
           <p className="text-sm text-zinc-400 italic">Empty document. Click Edit to start writing.</p>
         )}
