@@ -7,6 +7,7 @@ import { CalendarEventCard } from "@/components/chat/calendar-event-card";
 import { DataTableCard } from "@/components/chat/data-table-card";
 import { SmartCard } from "@/components/chat/smart-cards";
 import { RichMessageContent } from "@/components/chat/rich-message-content";
+import { StreamingMessage } from "@/components/chat/streaming-message";
 import { AgentTraceTimeline, type TraceEvent, type ThinkingEvent } from "@/components/chat/agent-trace";
 import { buildToolStatusPills } from "@/lib/chat/tool-status";
 import { ToolStatusPills } from "@/components/chat/tool-status-pills";
@@ -282,7 +283,11 @@ export function ChatMessageRow({
             </div>
           ) : null}
           {message.role === "assistant" ? (
-            <RichMessageContent content={message.content} isStreaming={message.isStreaming} />
+            message.isStreaming && message.streamSegments?.length ? (
+              <StreamingMessage segments={message.streamSegments} />
+            ) : (
+              <RichMessageContent content={message.content} isStreaming={message.isStreaming} />
+            )
           ) : (
             <UserMessageContent content={message.content} />
           )}

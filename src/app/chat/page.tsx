@@ -203,9 +203,17 @@ export default function ChatPage() {
   const applyAgentEventToMessage = useCallback((assistantMessageId: string, event: Record<string, unknown>) => {
     if (event.type === "text_delta" && typeof event.content === "string") {
       setIsThinking(false);
+      const deltaText = event.content;
       updateMessage(assistantMessageId, (message) => ({
         ...message,
-        content: message.content + event.content,
+        content: message.content + deltaText,
+        streamSegments: [
+          ...(message.streamSegments || []),
+          {
+            id: `${assistantMessageId}-${Date.now()}-${(message.streamSegments || []).length}`,
+            text: deltaText,
+          },
+        ],
       }));
       return;
     }
@@ -727,6 +735,7 @@ export default function ChatPage() {
                   isStreaming: false,
                   isError: !!event.isError,
                   backgroundJob: undefined,
+                  streamSegments: undefined,
                 };
               }
               return msg;
@@ -742,6 +751,7 @@ export default function ChatPage() {
                     content: String(event.message ?? "Sorry, I encountered an error."),
                     isStreaming: false,
                     isError: true,
+                    streamSegments: undefined,
                   }
                 : msg,
             ),
@@ -828,6 +838,7 @@ export default function ChatPage() {
                     : "Response interrupted before completion. Please try again.",
                   isStreaming: false,
                   isError: true,
+                  streamSegments: undefined,
                 }
               : msg,
           ),
@@ -845,6 +856,7 @@ export default function ChatPage() {
                   : "Sorry, I'm having trouble connecting. Please try again.",
                 isStreaming: false,
                 isError: true,
+                streamSegments: undefined,
               }
             : msg,
         ),
