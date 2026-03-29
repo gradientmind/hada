@@ -189,6 +189,35 @@ export async function getConversationMessagesForRegeneration(
 }
 
 /**
+ * Patch specific fields on a message's metadata, preserving existing metadata.
+ */
+export async function patchMessageMetadata(
+  supabase: SupabaseClient,
+  messageId: string,
+  patch: Partial<MessageMetadata>,
+): Promise<Message> {
+  const { data: existing, error: fetchError } = await supabase
+    .from("messages")
+    .select("content, metadata")
+    .eq("id", messageId)
+    .single();
+
+  if (fetchError || !existing) {
+    throw new Error(fetchError?.message || "Message not found");
+  }
+
+  return updateMessageById(
+    supabase,
+    messageId,
+    String(existing.content || ""),
+    {
+      ...(((existing.metadata || {}) as MessageMetadata)),
+      ...patch,
+    },
+  );
+}
+
+/**
  * Delete the user's latest conversation and all related messages.
  * Returns true when a conversation was deleted, false when none existed.
  */
