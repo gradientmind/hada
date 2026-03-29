@@ -11,7 +11,7 @@ import { TasksTab } from "@/components/settings/tasks-tab";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState, type ComponentType } from "react";
+import { Suspense, useEffect, useState, type ComponentType } from "react";
 
 type SettingsTabId = "integrations" | "account" | "memory" | "tasks" | "status";
 
@@ -54,6 +54,14 @@ const SETTINGS_TABS: Array<{
 ];
 
 export default function SettingsPage() {
+  return (
+    <Suspense>
+      <SettingsContent />
+    </Suspense>
+  );
+}
+
+function SettingsContent() {
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
   const searchParams = useSearchParams();
