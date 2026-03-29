@@ -830,6 +830,8 @@ export default function ChatPage() {
         ),
       );
     }
+
+    return currentAssistantId;
   }, [applyAgentEventToMessage, ensureBackgroundJobPolling]);
 
   const sendMessage = async (overrideMessage?: string) => {
@@ -860,6 +862,7 @@ export default function ChatPage() {
     setIsLoading(true);
     setIsThinking(true);
 
+    let resolvedAssistantId = tempAssistantId;
     try {
       const response = await fetch("/api/chat", {
         method: "POST",
@@ -867,12 +870,12 @@ export default function ChatPage() {
         body: JSON.stringify({ message: messageText.trim() }),
       });
 
-      await processChatStream(response, tempAssistantId, tempUserId);
+      resolvedAssistantId = await processChatStream(response, tempAssistantId, tempUserId);
     } catch (error) {
       console.error("Chat error:", error);
       setMessages((prev) =>
         prev.map((msg) =>
-          msg.id === tempAssistantId
+          msg.id === resolvedAssistantId
             ? {
                 ...msg,
                 content: error instanceof Error
@@ -957,11 +960,14 @@ export default function ChatPage() {
       feedback: { value, updated_at: new Date().toISOString() },
     }));
     try {
-      await fetch(`/api/messages/${assistantMessageId}/feedback`, {
+      const response = await fetch(`/api/messages/${assistantMessageId}/feedback`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ value }),
       });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
     } catch {
       // Revert optimistic update on error
       updateMessage(assistantMessageId, (message) => ({
