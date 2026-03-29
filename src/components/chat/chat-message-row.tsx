@@ -254,7 +254,7 @@ export function ChatMessageRow({
       )}
 
       {/* Content */}
-      <div className="min-w-0 flex-1 overflow-hidden pt-1 space-y-3">
+      <div className="min-w-0 flex-1 pt-1 space-y-3" style={{ minWidth: 0 }}>
         {/* Agent trace timeline */}
         {message.role === "assistant" &&
           (message.traceEvents?.length || message.thinkingEvents?.length) ? (

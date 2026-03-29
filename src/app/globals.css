@@ -123,6 +123,7 @@ html[data-theme="light"] {
   }
   body {
     @apply bg-background text-foreground;
+    overflow-x: hidden;
   }
   h1,
   h2,

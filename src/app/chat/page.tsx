@@ -1230,7 +1230,7 @@ export default function ChatPage() {
           {/* Messages Area */}
           <div className="flex-1 min-h-0 py-4">
             <ScrollArea
-              className="h-full"
+              className="h-full overflow-x-hidden"
               ref={scrollAreaRef}
               onScrollCapture={(e) => {
                 const target = e.target as HTMLElement;
@@ -1255,7 +1255,7 @@ export default function ChatPage() {
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ duration: 0.25, ease: "easeOut" }}
-                    className="flex min-h-full flex-col items-center justify-start px-2 pb-6 pt-4 text-center sm:min-h-[60vh] sm:justify-center sm:px-4"
+                    className="flex min-h-full w-full flex-col items-center justify-start overflow-x-hidden px-4 pb-6 pt-4 text-center sm:min-h-[60vh] sm:justify-center sm:px-4"
                   >
                     <div className="relative mb-5 hidden sm:block sm:mb-6">
                       <div className="absolute inset-0 -m-3 rounded-3xl bg-gradient-to-br from-teal-500/20 via-cyan-500/15 to-teal-400/20 blur-xl" style={{ animation: "glow-pulse 3s ease-in-out infinite" }} />
@@ -1263,10 +1263,10 @@ export default function ChatPage() {
                         <span className="text-2xl font-bold text-white">H</span>
                       </div>
                     </div>
-                    <h1 className="text-2xl font-semibold sm:text-3xl">
+                    <h1 className="w-full break-words text-2xl font-semibold sm:text-3xl">
                       <span className="gradient-text">{greetingText}</span>, {user?.name || "there"}
                     </h1>
-                    <p className="mt-2 max-w-md text-sm text-zinc-500 sm:text-lg">What can I help you with today?</p>
+                    <p className="mt-2 w-full max-w-md text-sm text-zinc-500 sm:text-lg">What can I help you with today?</p>
 
                     <div className="mt-5 w-full max-w-2xl sm:hidden">
                       {inputForm}
