@@ -7,12 +7,13 @@ import { StatusTab } from "@/components/settings/status-tab";
 import { IntegrationsTab } from "@/components/settings/integrations-tab";
 import { AccountTab } from "@/components/settings/account-tab";
 import { MemoryTab } from "@/components/settings/memory-tab";
+import { TasksTab } from "@/components/settings/tasks-tab";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, type ComponentType } from "react";
 
-type SettingsTabId = "status" | "integrations" | "account" | "memory";
+type SettingsTabId = "integrations" | "account" | "memory" | "tasks" | "status";
 
 const SETTINGS_TABS: Array<{
   id: SettingsTabId;
@@ -20,12 +21,6 @@ const SETTINGS_TABS: Array<{
   description: string;
   icon: ComponentType<{ className?: string }>;
 }> = [
-  {
-    id: "status",
-    label: "Status",
-    description: "Runtime health and provider checks",
-    icon: StatusIcon,
-  },
   {
     id: "integrations",
     label: "Integrations",
@@ -44,13 +39,32 @@ const SETTINGS_TABS: Array<{
     description: "Saved preferences across chats",
     icon: MemoryIcon,
   },
+  {
+    id: "tasks",
+    label: "Tasks",
+    description: "Scheduled tasks and automations",
+    icon: TasksIcon,
+  },
+  {
+    id: "status",
+    label: "Status",
+    description: "Runtime health and provider checks",
+    icon: StatusIcon,
+  },
 ];
 
 export default function SettingsPage() {
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<SettingsTabId>("status");
   const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = createClient();
+
+  const initialTab = (() => {
+    const tab = searchParams.get("tab");
+    return tab && SETTINGS_TABS.some((t) => t.id === tab) ? (tab as SettingsTabId) : "integrations";
+  })();
+
+  const [activeTab, setActiveTab] = useState<SettingsTabId>(initialTab);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -116,10 +130,11 @@ export default function SettingsPage() {
                 {SETTINGS_TABS.find((tab) => tab.id === activeTab)?.description}
               </p>
             </div>
-            {activeTab === "status" ? <StatusTab /> : null}
             {activeTab === "integrations" ? <IntegrationsTab /> : null}
             {activeTab === "account" ? <AccountTab /> : null}
             {activeTab === "memory" ? <MemoryTab /> : null}
+            {activeTab === "tasks" ? <TasksTab /> : null}
+            {activeTab === "status" ? <StatusTab /> : null}
           </div>
         </div>
       </div>
@@ -151,9 +166,6 @@ export default function SettingsPage() {
 
         <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-6 pt-4 sm:px-4 md:p-6">
           <div className="max-w-3xl">
-            <TabsContent value="status" className="mt-0">
-              <StatusTab />
-            </TabsContent>
             <TabsContent value="integrations" className="mt-0">
               <IntegrationsTab />
             </TabsContent>
@@ -162,6 +174,12 @@ export default function SettingsPage() {
             </TabsContent>
             <TabsContent value="memory" className="mt-0">
               <MemoryTab />
+            </TabsContent>
+            <TabsContent value="tasks" className="mt-0">
+              <TasksTab />
+            </TabsContent>
+            <TabsContent value="status" className="mt-0">
+              <StatusTab />
             </TabsContent>
           </div>
         </div>
@@ -203,6 +221,15 @@ function MemoryIcon({ className }: { className?: string }) {
       <path d="M8 12.5v3" />
       <path d="M12 13.5V17" />
       <path d="M16 12.5v3" />
+    </svg>
+  );
+}
+
+function TasksIcon({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M9 11l3 3L22 4" />
+      <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
     </svg>
   );
 }
