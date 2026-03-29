@@ -34,15 +34,34 @@ import type { Document } from "@/lib/types/database";
 
 type DocListItem = Pick<Document, "id" | "title" | "folder" | "updated_at"> & { preview?: string };
 
-function formatUpdated(iso: string): string {
-  const date = new Date(iso);
-  const now = new Date();
-  const diffDays = Math.floor((now.getTime() - date.getTime()) / 86400000);
-  if (diffDays === 0) return "today";
-  if (diffDays === 1) return "yesterday";
-  if (diffDays < 7) return `${diffDays}d ago`;
-  return date.toLocaleDateString();
-}
+
+const WELCOME_DOC_CONTENT = `# Welcome to Hada
+
+This is your **Docs** space — a library of documents your assistant can read and work from.
+
+## How it works
+
+Documents here act as context for your assistant. Reference them in chat:
+
+> "Use my Priorities doc to plan my week"
+> "Based on my About Me document, draft a short bio for my website"
+
+Hada can also list and read your documents on its own when relevant.
+
+## Suggested documents to create
+
+- **About Me** — your role, background, working style, and preferences
+- **Priorities** — current goals and focus areas (weekly or quarterly)
+- **Projects** — active projects with status and next steps
+- **Contacts** — key people, their roles, and context
+
+## Tips
+
+- Write in plain markdown — headings, bullets, and tables all work
+- Keep documents focused on one topic so the assistant can reference them precisely
+- Upload existing \`.md\` files using the ↑ button in the sidebar
+- Update documents regularly so your assistant has fresh context
+`;
 
 export default function DashboardPage() {
   const [docs, setDocs] = useState<DocListItem[]>([]);
@@ -54,15 +73,19 @@ export default function DashboardPage() {
   const [newFolderInput, setNewFolderInput] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [renamingDocId, setRenamingDocId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const supabase = createClient();
 
   const loadDocs = useCallback(async () => {
     const response = await fetch("/api/documents");
-    if (!response.ok) return;
+    if (!response.ok) return [];
     const data = (await response.json()) as { documents?: DocListItem[] };
-    setDocs(data.documents ?? []);
+    const list = data.documents ?? [];
+    setDocs(list);
+    return list;
   }, []);
 
   useEffect(() => {
@@ -71,7 +94,23 @@ export default function DashboardPage() {
       const { data, error } = await supabase.auth.getUser();
       if (!active) return;
       if (error || !data.user) { router.push("/auth/login"); return; }
-      await loadDocs();
+      const list = await loadDocs();
+      // Seed welcome doc for new users
+      if (active && list.length === 0) {
+        const res = await fetch("/api/documents", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: "Welcome to Hada", content: WELCOME_DOC_CONTENT, folder: null }),
+        });
+        if (res.ok) {
+          const created = (await res.json()) as { document?: Document };
+          if (created.document && active) {
+            setDocs([{ id: created.document.id, title: created.document.title, folder: null, updated_at: created.document.updated_at }]);
+            setActiveDocId(created.document.id);
+            setActiveDoc(created.document);
+          }
+        }
+      }
       if (active) setIsLoading(false);
     }
     void initialize();
@@ -113,6 +152,25 @@ export default function DashboardPage() {
     await loadDocs();
     if (activeDocId === id) { setActiveDocId(null); setActiveDoc(null); }
   }, [activeDocId, loadDocs]);
+
+  const startRename = useCallback((doc: DocListItem) => {
+    setRenamingDocId(doc.id);
+    setRenameValue(doc.title);
+  }, []);
+
+  const commitRename = useCallback(async () => {
+    if (!renamingDocId) return;
+    const newTitle = renameValue.trim() || "Untitled";
+    setRenamingDocId(null);
+    await fetch(`/api/documents/${renamingDocId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: newTitle }),
+    });
+    await loadDocs();
+    // Update active doc title if it's the one being renamed
+    setActiveDoc((prev) => prev?.id === renamingDocId ? { ...prev, title: newTitle } : prev);
+  }, [renamingDocId, renameValue, loadDocs]);
 
   const handleUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -189,7 +247,7 @@ export default function DashboardPage() {
                   <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.15 }} className="overflow-hidden">
                     <div className="ml-3 border-l border-zinc-200/70 pl-2 dark:border-zinc-800">
                       {folderDocs.map((doc) => (
-                        <DocItem key={doc.id} doc={doc} isActive={activeDocId === doc.id} onSelect={selectDoc} />
+                        <DocItem key={doc.id} doc={doc} isActive={activeDocId === doc.id} onSelect={selectDoc} isRenaming={renamingDocId === doc.id} renameValue={renameValue} onRenameStart={startRename} onRenameChange={setRenameValue} onRenameCommit={commitRename} onRenameCancel={() => setRenamingDocId(null)} />
                       ))}
                       <button onClick={() => void createDoc(folder)} className="flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-xs text-zinc-400 transition-colors hover:text-zinc-600 dark:hover:text-zinc-300">
                         <Plus className="h-3 w-3" />New in {folder}
@@ -203,7 +261,7 @@ export default function DashboardPage() {
         })}
 
         {rootDocs.map((doc) => (
-          <DocItem key={doc.id} doc={doc} isActive={activeDocId === doc.id} onSelect={selectDoc} />
+          <DocItem key={doc.id} doc={doc} isActive={activeDocId === doc.id} onSelect={selectDoc} isRenaming={renamingDocId === doc.id} renameValue={renameValue} onRenameStart={startRename} onRenameChange={setRenameValue} onRenameCommit={commitRename} onRenameCancel={() => setRenamingDocId(null)} />
         ))}
 
         {newFolderInput ? (
@@ -408,19 +466,67 @@ function WysiwygPane({
   );
 }
 
-function DocItem({ doc, isActive, onSelect }: { doc: DocListItem; isActive: boolean; onSelect: (id: string) => void }) {
+function DocItem({
+  doc, isActive, onSelect,
+  isRenaming, renameValue, onRenameStart, onRenameChange, onRenameCommit, onRenameCancel,
+}: {
+  doc: DocListItem;
+  isActive: boolean;
+  onSelect: (id: string) => void;
+  isRenaming: boolean;
+  renameValue: string;
+  onRenameStart: (doc: DocListItem) => void;
+  onRenameChange: (v: string) => void;
+  onRenameCommit: () => void;
+  onRenameCancel: () => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isRenaming) inputRef.current?.select();
+  }, [isRenaming]);
+
+  if (isRenaming) {
+    return (
+      <div className="flex items-center gap-2 rounded-md px-2 py-1 bg-teal-500/10">
+        <FileText className="h-3.5 w-3.5 shrink-0 text-teal-500" />
+        <input
+          ref={inputRef}
+          value={renameValue}
+          onChange={(e) => onRenameChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") { e.preventDefault(); onRenameCommit(); }
+            if (e.key === "Escape") onRenameCancel();
+          }}
+          onBlur={onRenameCommit}
+          className="min-w-0 flex-1 bg-transparent text-sm text-zinc-900 outline-none dark:text-zinc-50"
+        />
+      </div>
+    );
+  }
+
   return (
-    <button
-      onClick={() => onSelect(doc.id)}
+    <div
       className={cn(
-        "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors",
+        "group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors",
         isActive ? "bg-teal-500/10 text-teal-700 dark:text-teal-300" : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800",
       )}
     >
-      <FileText className={cn("h-3.5 w-3.5 shrink-0", isActive ? "text-teal-500" : "text-zinc-400")} />
-      <span className="truncate">{doc.title}</span>
-      <span className="ml-auto shrink-0 text-[10px] text-zinc-400">{formatUpdated(doc.updated_at)}</span>
-    </button>
+      <button onClick={() => onSelect(doc.id)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+        <FileText className={cn("h-3.5 w-3.5 shrink-0", isActive ? "text-teal-500" : "text-zinc-400")} />
+        <span className="truncate">{doc.title}</span>
+      </button>
+      <button
+        onClick={(e) => { e.stopPropagation(); onRenameStart(doc); }}
+        className="ml-auto shrink-0 rounded p-0.5 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-zinc-200 dark:hover:bg-zinc-700"
+        title="Rename"
+      >
+        <svg className="h-3 w-3 text-zinc-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+        </svg>
+      </button>
+    </div>
   );
 }
 
