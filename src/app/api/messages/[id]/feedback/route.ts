@@ -23,9 +23,14 @@ export async function POST(
   }
 
   const params = await context.params;
-  const message = await patchMessageMetadata(supabase, params.id, {
-    feedback: { value, updated_at: new Date().toISOString() },
-  });
-
-  return NextResponse.json({ message });
+  try {
+    const message = await patchMessageMetadata(supabase, params.id, {
+      feedback: { value, updated_at: new Date().toISOString() },
+    });
+    return NextResponse.json({ message });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Unknown error";
+    const status = msg === "Message not found" ? 404 : 500;
+    return NextResponse.json({ error: msg }, { status });
+  }
 }
