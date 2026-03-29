@@ -52,6 +52,15 @@ interface Message {
       arguments: Record<string, unknown>;
     };
   };
+  followUpSuggestions?: string[];
+  feedback?: {
+    value?: "up" | "down";
+    updated_at?: string;
+  };
+  streamSegments?: Array<{
+    id: string;
+    text: string;
+  }>;
   isError?: boolean;
   isStreaming?: boolean;
   created_at: string;
@@ -77,6 +86,11 @@ interface ApiMessage {
         name?: string;
         arguments?: Record<string, unknown>;
       };
+    };
+    followUpSuggestions?: unknown;
+    feedback?: {
+      value?: unknown;
+      updated_at?: unknown;
     };
   } | null;
   created_at: string;
@@ -294,6 +308,22 @@ export default function ChatPage() {
           pending: msg.metadata.backgroundJob.pending !== false,
         }
       : undefined,
+    followUpSuggestions: Array.isArray(msg.metadata?.followUpSuggestions)
+      ? msg.metadata.followUpSuggestions.filter((value): value is string => typeof value === "string")
+      : undefined,
+    feedback:
+      msg.metadata?.feedback && typeof msg.metadata.feedback === "object"
+        ? {
+            value:
+              msg.metadata.feedback.value === "up" || msg.metadata.feedback.value === "down"
+                ? msg.metadata.feedback.value
+                : undefined,
+            updated_at:
+              typeof msg.metadata.feedback.updated_at === "string"
+                ? msg.metadata.feedback.updated_at
+                : undefined,
+          }
+        : undefined,
     isError: !!msg.metadata?.gatewayError,
     created_at: msg.created_at,
   });

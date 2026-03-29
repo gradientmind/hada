@@ -62,6 +62,11 @@ export interface MessageMetadata {
     status?: "queued" | "running" | "completed" | "failed" | "timeout";
     pending?: boolean;
   };
+  followUpSuggestions?: string[];
+  feedback?: {
+    value?: "up" | "down";
+    updated_at?: string;
+  };
   cards?: unknown[];
   confirmation?: {
     pending?: boolean;
