@@ -168,6 +168,27 @@ export async function getConversationId(
 }
 
 /**
+ * Load all messages in a conversation for regeneration resolution.
+ * Returns minimal fields (id, role, content) in chronological order.
+ */
+export async function getConversationMessagesForRegeneration(
+  supabase: SupabaseClient,
+  conversationId: string,
+): Promise<Array<{ id: string; role: MessageRole; content: string }>> {
+  const { data, error } = await supabase
+    .from("messages")
+    .select("id, role, content")
+    .eq("conversation_id", conversationId)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    throw new Error(`Failed to load regeneration messages: ${error.message}`);
+  }
+
+  return (data || []) as Array<{ id: string; role: MessageRole; content: string }>;
+}
+
+/**
  * Delete the user's latest conversation and all related messages.
  * Returns true when a conversation was deleted, false when none existed.
  */

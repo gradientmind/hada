@@ -1,7 +1,9 @@
 import { NextRequest } from "next/server";
 import { enqueueBackgroundJob, scheduleBackgroundJobProcessing } from "@/lib/background-jobs";
+import { resolveRegenerationPair } from "@/lib/chat/regenerate-message";
 import { isLongJobMessage } from "@/lib/chat/runtime-budgets";
 import { processMessage } from "@/lib/chat/process-message";
+import { getOrCreateConversation, getConversationMessagesForRegeneration } from "@/lib/db/conversations";
 import { createClient } from "@/lib/supabase/server";
 import type { AgentEvent } from "@/lib/types/database";
 
@@ -23,7 +25,12 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json().catch(() => ({}));
   const message = typeof body?.message === "string" ? body.message.trim() : "";
-  if (!message) {
+  const regenerateAssistantMessageId =
+    typeof body?.regenerateAssistantMessageId === "string"
+      ? body.regenerateAssistantMessageId
+      : null;
+
+  if (!message && !regenerateAssistantMessageId) {
     return new Response(JSON.stringify({ error: "Message is required" }), {
       status: 400,
       headers: { "Content-Type": "application/json" },
@@ -41,6 +48,56 @@ export async function POST(request: NextRequest) {
           // Client disconnected — writes will fail silently.
         }
       };
+
+      // Handle regeneration: resolve the target pair and re-run the agent
+      if (regenerateAssistantMessageId) {
+        void (async () => {
+          try {
+            const conversation = await getOrCreateConversation(supabase, user.id);
+            const messages = await getConversationMessagesForRegeneration(
+              supabase,
+              conversation.id,
+            );
+            const pair = resolveRegenerationPair(messages, regenerateAssistantMessageId);
+
+            const result = await processMessage({
+              userId: user.id,
+              message: pair.message,
+              source: "web",
+              supabase,
+              conversationId: conversation.id,
+              userMessageId: pair.userMessageId,
+              assistantMessageId: pair.assistantMessageId,
+              onEvent: (event: AgentEvent) => {
+                emit(event);
+              },
+            });
+
+            emit({
+              type: "complete",
+              id: result.assistantMessageId,
+              conversationId: result.conversationId,
+              userMessageId: result.userMessageId,
+              cards: Array.isArray(result.metadata.cards) ? result.metadata.cards : undefined,
+              isError: !!result.metadata.gatewayError,
+              errorMessage: result.metadata.gatewayError?.message,
+            });
+          } catch (error: unknown) {
+            emit({
+              type: "error",
+              message:
+                error instanceof Error ? error.message : "Failed to regenerate response.",
+            });
+          } finally {
+            try {
+              controller.close();
+            } catch {
+              // Already closed.
+            }
+          }
+        })();
+        return;
+      }
 
       const runDirectly = () => {
         processMessage({

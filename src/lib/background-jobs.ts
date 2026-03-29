@@ -35,6 +35,10 @@ export async function enqueueBackgroundJob(options: {
   userId: string;
   source: MessageSource;
   message: string;
+  /** Optional existing IDs for regeneration — reuses rows instead of creating new ones. */
+  userMessageId?: string;
+  assistantMessageId?: string;
+  conversationId?: string;
 }): Promise<{
   jobId: string;
   conversationId: string;
@@ -42,19 +46,10 @@ export async function enqueueBackgroundJob(options: {
   assistantMessageId: string;
   processingToken: string;
 }> {
-  const conversation = await getOrCreateConversation(options.supabase, options.userId);
+  const conversationId = options.conversationId
+    ?? (await getOrCreateConversation(options.supabase, options.userId)).id;
   const jobId = crypto.randomUUID();
   const processingToken = crypto.randomUUID();
-
-  const userMessage = await saveMessage(
-    options.supabase,
-    conversation.id,
-    "user",
-    options.message,
-    {
-      source: options.source,
-    },
-  );
 
   const assistantMetadata: MessageMetadata = {
     source: options.source,
@@ -65,20 +60,49 @@ export async function enqueueBackgroundJob(options: {
     },
   };
 
-  const assistantMessage = await saveMessage(
-    options.supabase,
-    conversation.id,
-    "assistant",
-    "",
-    assistantMetadata,
-  );
+  let userMessageId: string;
+  let assistantMessageId: string;
+
+  if (options.userMessageId && options.assistantMessageId) {
+    // Regeneration: reuse existing message rows
+    userMessageId = options.userMessageId;
+    assistantMessageId = options.assistantMessageId;
+
+    await updateMessageById(
+      options.supabase,
+      assistantMessageId,
+      "",
+      assistantMetadata,
+    );
+  } else {
+    // Normal path: create new message rows
+    const userMessage = await saveMessage(
+      options.supabase,
+      conversationId,
+      "user",
+      options.message,
+      {
+        source: options.source,
+      },
+    );
+    userMessageId = userMessage.id;
+
+    const assistantMessage = await saveMessage(
+      options.supabase,
+      conversationId,
+      "assistant",
+      "",
+      assistantMetadata,
+    );
+    assistantMessageId = assistantMessage.id;
+  }
 
   const { error } = await options.supabase.from("background_jobs").insert({
     id: jobId,
     user_id: options.userId,
-    conversation_id: conversation.id,
-    user_message_id: userMessage.id,
-    assistant_message_id: assistantMessage.id,
+    conversation_id: conversationId,
+    user_message_id: userMessageId,
+    assistant_message_id: assistantMessageId,
     source: options.source,
     request_text: options.message,
     status: "queued",
@@ -91,9 +115,9 @@ export async function enqueueBackgroundJob(options: {
 
   return {
     jobId,
-    conversationId: conversation.id,
-    userMessageId: userMessage.id,
-    assistantMessageId: assistantMessage.id,
+    conversationId,
+    userMessageId,
+    assistantMessageId,
     processingToken,
   };
 }
